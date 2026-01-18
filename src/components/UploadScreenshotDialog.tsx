@@ -82,9 +82,12 @@ export function UploadScreenshotDialog({
         );
         if (byLast4) return byLast4;
       }
+
+      // If we have valid digits but no match, it's a new card - don't fallback to name
+      return null;
     }
 
-    // Match by name (fuzzy - check if names are similar)
+    // Only use name matching when digits couldn't be extracted (00000)
     const byName = existingCards.find((c) => {
       const existingName = c.name.toLowerCase().trim();
       const parsedName = parsedCard.name.toLowerCase().trim();
