@@ -77,6 +77,7 @@ export function CreditCardItem({ card, onEdit, onDelete }: CreditCardItemProps) 
             date={dueDate}
             daysUntil={daysUntilDue}
             urgency={dueUrgency}
+            highlightOnUrgent={true}
           />
         </div>
       </div>
@@ -89,24 +90,36 @@ interface DateBadgeProps {
   date: Date;
   daysUntil: number;
   urgency: 'urgent' | 'warning' | 'normal';
+  highlightOnUrgent?: boolean;
 }
 
-function DateBadge({ label, date, daysUntil, urgency }: DateBadgeProps) {
+function DateBadge({ label, date, daysUntil, urgency, highlightOnUrgent = false }: DateBadgeProps) {
+  const shouldHighlight = highlightOnUrgent && urgency !== 'normal';
+  
   return (
-    <div className="bg-blue-500/30 backdrop-blur-sm rounded-lg p-2">
+    <div className={cn(
+      'backdrop-blur-sm rounded-lg p-2 transition-all',
+      shouldHighlight && urgency === 'urgent' && 'bg-red-500 shadow-lg',
+      shouldHighlight && urgency === 'warning' && 'bg-orange-500 shadow-md',
+      !shouldHighlight && 'bg-blue-500/30'
+    )}>
       <div className="flex items-center gap-1 mb-0.5">
         {urgency === 'urgent' && (
-          <AlertCircle className="w-3 h-3 text-red-300" />
+          <AlertCircle className={cn('w-3 h-3', shouldHighlight ? 'text-white' : 'text-red-300')} />
         )}
-        <span className="text-[10px] opacity-70">{label}</span>
+        {urgency === 'warning' && shouldHighlight && (
+          <AlertCircle className="w-3 h-3 text-white" />
+        )}
+        <span className={cn('text-[10px]', shouldHighlight ? 'text-white/90 font-medium' : 'opacity-70')}>{label}</span>
       </div>
-      <p className="text-xs font-medium">{formatDate(date)}</p>
+      <p className={cn('text-xs font-medium', shouldHighlight && 'text-white')}>{formatDate(date)}</p>
       <p
         className={cn(
           'text-[10px] mt-0.5',
-          urgency === 'urgent' && 'text-red-300 font-medium',
-          urgency === 'warning' && 'text-amber-300 font-medium',
-          urgency === 'normal' && 'opacity-70'
+          shouldHighlight && 'text-white font-bold',
+          !shouldHighlight && urgency === 'urgent' && 'text-red-300 font-medium',
+          !shouldHighlight && urgency === 'warning' && 'text-amber-300 font-medium',
+          !shouldHighlight && urgency === 'normal' && 'opacity-70'
         )}
       >
         {daysUntil === 0 ? 'Today!' : `${daysUntil} days`}
