@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           annual_fee: number | null
           annual_fee_date: string | null
+          company_name: string | null
           created_at: string
           credit_limit: number | null
           current_balance: number | null
@@ -38,6 +39,7 @@ export type Database = {
         Insert: {
           annual_fee?: number | null
           annual_fee_date?: string | null
+          company_name?: string | null
           created_at?: string
           credit_limit?: number | null
           current_balance?: number | null
@@ -58,6 +60,7 @@ export type Database = {
         Update: {
           annual_fee?: number | null
           annual_fee_date?: string | null
+          company_name?: string | null
           created_at?: string
           credit_limit?: number | null
           current_balance?: number | null

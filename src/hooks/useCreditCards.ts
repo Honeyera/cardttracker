@@ -10,6 +10,7 @@ const MIGRATED_FLAG_PREFIX = 'credit-cards-migrated:';
 type DbCard = {
   id: string;
   name: string;
+  company_name: string | null;
   owner_name: string | null;
   last_four: string | null;
   network: string | null;
@@ -25,6 +26,7 @@ function dbToModel(card: DbCard): CreditCard {
   return {
     id: card.id,
     name: card.name,
+    companyName: card.company_name ?? undefined,
     ownerName: card.owner_name ?? undefined,
     lastFiveDigits: card.last_four || '00000',
     closingDay: card.statement_date || 1,
@@ -162,6 +164,7 @@ export function useCreditCards() {
       .insert({
         user_id: user.id,
         name: card.name,
+        company_name: card.companyName || '',
         owner_name: card.ownerName || '',
         last_four: card.lastFiveDigits,
         network: card.color,
@@ -191,6 +194,7 @@ export function useCreditCards() {
 
     const dbUpdates: Record<string, unknown> = {};
     if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.companyName !== undefined) dbUpdates.company_name = updates.companyName;
     if (updates.ownerName !== undefined) dbUpdates.owner_name = updates.ownerName;
     if (updates.lastFiveDigits !== undefined) dbUpdates.last_four = updates.lastFiveDigits;
     if (updates.color !== undefined) dbUpdates.network = updates.color;

@@ -41,6 +41,7 @@ export function AddCardDialog({
   editCard,
 }: AddCardDialogProps) {
   const [name, setName] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [lastFiveDigits, setLastFiveDigits] = useState('');
   const [closingDay, setClosingDay] = useState('');
@@ -52,6 +53,7 @@ export function AddCardDialog({
   useEffect(() => {
     if (editCard) {
       setName(editCard.name);
+      setCompanyName(editCard.companyName || '');
       setOwnerName(editCard.ownerName || '');
       setLastFiveDigits(editCard.lastFiveDigits || '');
       setClosingDay(editCard.closingDay.toString());
@@ -66,6 +68,7 @@ export function AddCardDialog({
 
   const resetForm = () => {
     setName('');
+    setCompanyName('');
     setOwnerName('');
     setLastFiveDigits('');
     setClosingDay('');
@@ -80,6 +83,7 @@ export function AddCardDialog({
 
     const cardData = {
       name,
+      companyName: companyName || undefined,
       ownerName: ownerName || undefined,
       lastFiveDigits,
       closingDay: parseInt(closingDay),
@@ -133,6 +137,16 @@ export function AddCardDialog({
               placeholder="e.g., Chase Sapphire"
               value={name}
               onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="company">Company / Issuer</Label>
+            <Input
+              id="company"
+              placeholder="e.g., Chase, Amex, Capital One"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
             />
           </div>
 

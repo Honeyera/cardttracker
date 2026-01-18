@@ -1,6 +1,7 @@
 export interface CreditCard {
   id: string;
   name: string;
+  companyName?: string;
   ownerName?: string;
   lastFiveDigits: string;
   closingDay: number; // Day of month (1-31)
