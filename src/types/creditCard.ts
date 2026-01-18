@@ -9,6 +9,7 @@ export interface CreditCard {
   color: 'navy' | 'teal' | 'slate' | 'ocean' | 'gold' | 'rose' | 'purple' | 'emerald';
   creditLimit?: number;
   currentBalance?: number;
+  teamId?: string;
 }
 
 export type CardColor = CreditCard['color'];
