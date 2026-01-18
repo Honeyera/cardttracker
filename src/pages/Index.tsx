@@ -70,9 +70,6 @@ const Index = () => {
         {/* Dashboard Stats */}
         <DashboardStats cards={cards} />
 
-        {/* Upcoming Dates Section */}
-        <UpcomingDates cards={cards} />
-
         {/* Cards Section */}
         <div>
           <div className="flex items-center gap-2 mb-4">
@@ -107,8 +104,10 @@ const Index = () => {
             </div>
           )}
         </div>
-      </main>
 
+        {/* Upcoming Dates Section */}
+        <UpcomingDates cards={cards} />
+      </main>
       {/* Add/Edit Card Dialog */}
       <AddCardDialog
         open={dialogOpen}
