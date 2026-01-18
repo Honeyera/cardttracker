@@ -9,6 +9,7 @@ interface UpcomingDatesProps {
 
 interface DateEvent {
   cardName: string;
+  lastFiveDigits: string;
   type: 'closing' | 'due';
   date: Date;
   daysUntil: number;
@@ -19,12 +20,14 @@ export function UpcomingDates({ cards }: UpcomingDatesProps) {
     .flatMap((card) => [
       {
         cardName: card.name,
+        lastFiveDigits: card.lastFiveDigits,
         type: 'closing' as const,
         date: getNextOccurrence(card.closingDay),
         daysUntil: getDaysUntil(card.closingDay),
       },
       {
         cardName: card.name,
+        lastFiveDigits: card.lastFiveDigits,
         type: 'due' as const,
         date: getNextOccurrence(card.dueDay),
         daysUntil: getDaysUntil(card.dueDay),
@@ -64,6 +67,9 @@ export function UpcomingDates({ cards }: UpcomingDatesProps) {
                 <div>
                   <p className="text-sm font-medium text-card-foreground">
                     {event.cardName}
+                    <span className="ml-2 text-xs text-muted-foreground font-mono">
+                      •••{event.lastFiveDigits}
+                    </span>
                   </p>
                   <p className="text-xs text-muted-foreground capitalize">
                     {event.type} Date
