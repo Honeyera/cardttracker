@@ -26,6 +26,10 @@ const colorOptions: { value: CardColor; label: string }[] = [
   { value: 'teal', label: 'Teal' },
   { value: 'slate', label: 'Slate' },
   { value: 'ocean', label: 'Ocean' },
+  { value: 'gold', label: 'Gold' },
+  { value: 'rose', label: 'Rose' },
+  { value: 'purple', label: 'Purple' },
+  { value: 'emerald', label: 'Emerald' },
 ];
 
 export function AddCardDialog({
