@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -34,16 +34,19 @@ const Index = () => {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<CreditCardType | null>(null);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  const pointerSensor = useSensor(PointerSensor, {
+    activationConstraint: {
+      distance: 8,
+    },
+  });
+  
+  const keyboardSensor = useSensor(KeyboardSensor, {
+    coordinateGetter: sortableKeyboardCoordinates,
+  });
+  
+  const sensors = useSensors(pointerSensor, keyboardSensor);
+  
+  const cardIds = useMemo(() => cards.map((card) => card.id), [cards]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -169,7 +172,7 @@ const Index = () => {
               onDragEnd={handleDragEnd}
             >
               <SortableContext
-                items={cards.map((card) => card.id)}
+                items={cardIds}
                 strategy={rectSortingStrategy}
               >
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
