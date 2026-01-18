@@ -11,6 +11,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
+// Create context with undefined as default - will throw if used outside provider
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
