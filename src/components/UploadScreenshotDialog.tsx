@@ -1,16 +1,16 @@
-import { useState, useRef } from 'react';
+import { useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Upload, Loader2, ImageIcon, Check, RefreshCw, Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { CreditCard, CardColor } from '@/types/creditCard';
 import { useToast } from '@/hooks/use-toast';
+import { CreditCard, CardColor } from '@/types/creditCard';
+import { Check, ImageIcon, Loader2, Plus, RefreshCw, Upload } from 'lucide-react';
 
 interface UploadScreenshotDialogProps {
   open: boolean;
@@ -37,6 +37,14 @@ interface ParsedCard {
 
 const cardColors: CardColor[] = ['navy', 'teal', 'slate', 'ocean', 'gold', 'rose', 'purple', 'emerald'];
 
+function normalizeLastFiveDigits(value: unknown): string {
+  // Handles values like: 81008, "81008", "•••• 81008", "x81008\n", etc.
+  const raw = typeof value === 'number' ? String(Math.trunc(value)) : String(value ?? '');
+  const digitsOnly = raw.replace(/\D/g, '');
+  if (!digitsOnly) return '00000';
+  return digitsOnly.slice(-5).padStart(5, '0');
+}
+
 export function UploadScreenshotDialog({
   open,
   onOpenChange,
@@ -51,55 +59,18 @@ export function UploadScreenshotDialog({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const normalizeLastFiveDigits = (value: unknown): string => {
-    // Handles values like: 81008, "81008", "•••• 81008", "x81008\n", etc.
-    const raw =
-      typeof value === 'number'
-        ? String(Math.trunc(value))
-        : String(value ?? '');
-
-    const digitsOnly = raw.replace(/\D/g, '');
-    if (!digitsOnly) return '00000';
-
-    return digitsOnly.slice(-5).padStart(5, '0');
-  };
-
   const findExistingCard = (parsedCard: ParsedCard): CreditCard | null => {
     const parsedDigits = normalizeLastFiveDigits(parsedCard.lastFiveDigits);
 
-    // Match by last 5 digits first (most reliable)
-    if (parsedDigits !== '00000') {
-      const byDigits = existingCards.find(
-        (c) => normalizeLastFiveDigits(c.lastFiveDigits) === parsedDigits
-      );
-      if (byDigits) return byDigits;
+    // Strict matching ONLY by the digits. If digits couldn't be extracted, do not guess.
+    // This avoids incorrectly "updating" the wrong card.
+    if (parsedDigits === '00000') return null;
 
-      // Fallback: match by last 4 digits (some issuers only show last 4)
-      const parsedLast4 = parsedDigits.slice(-4);
-      if (parsedLast4 !== '0000') {
-        const byLast4 = existingCards.find(
-          (c) => normalizeLastFiveDigits(c.lastFiveDigits).slice(-4) === parsedLast4
-        );
-        if (byLast4) return byLast4;
-      }
+    const byDigits = existingCards.find(
+      (c) => normalizeLastFiveDigits(c.lastFiveDigits) === parsedDigits
+    );
 
-      // If we have valid digits but no match, it's a new card - don't fallback to name
-      return null;
-    }
-
-    // Only use name matching when digits couldn't be extracted (00000)
-    const byName = existingCards.find((c) => {
-      const existingName = c.name.toLowerCase().trim();
-      const parsedName = parsedCard.name.toLowerCase().trim();
-      return (
-        existingName === parsedName ||
-        existingName.includes(parsedName) ||
-        parsedName.includes(existingName)
-      );
-    });
-    if (byName) return byName;
-
-    return null;
+    return byDigits ?? null;
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,18 +97,28 @@ export function UploadScreenshotDialog({
       });
 
       if (error) throw new Error(error.message);
-      if (data.error) throw new Error(data.error);
+      if (data?.error) throw new Error(data.error);
 
-      if (data.cards && data.cards.length > 0) {
+      if (data?.cards && data.cards.length > 0) {
         const parsedCards: ParsedCard[] = data.cards.map((card: any, index: number) => ({
-          name: card.name || 'Unknown Card',
-          lastFiveDigits: normalizeLastFiveDigits(card.lastFiveDigits),
-          closingDay: Math.min(31, Math.max(1, parseInt(card.closingDay) || 15)),
-          dueDay: Math.min(31, Math.max(1, parseInt(card.dueDay) || 22)),
+          name: card?.name || 'Unknown Card',
+          lastFiveDigits: normalizeLastFiveDigits(card?.lastFiveDigits),
+          closingDay: Math.min(31, Math.max(1, parseInt(card?.closingDay) || 15)),
+          dueDay: Math.min(31, Math.max(1, parseInt(card?.dueDay) || 22)),
           color: cardColors[index % cardColors.length],
-          currentBalance: parseFloat(card.currentBalance) || 0,
-          creditLimit: card.creditLimit ? parseFloat(card.creditLimit) : undefined,
+          currentBalance: parseFloat(card?.currentBalance) || 0,
+          creditLimit: card?.creditLimit ? parseFloat(card.creditLimit) : undefined,
         }));
+
+        const missingDigitsCount = parsedCards.filter((c) => c.lastFiveDigits === '00000').length;
+        if (missingDigitsCount > 0) {
+          toast({
+            title: 'Some card digits could not be read',
+            description:
+              'We could not detect the last 5 digits for some cards, so they will be treated as new to avoid updating the wrong card.',
+            variant: 'destructive',
+          });
+        }
 
         const newCardsList: ParsedCard[] = [];
         const matchedCardsList: MatchedCard[] = [];
@@ -171,11 +152,11 @@ export function UploadScreenshotDialog({
           variant: 'destructive',
         });
       }
-    } catch (error) {
-      console.error('Error analyzing screenshot:', error);
+    } catch (err) {
+      console.error('Error analyzing screenshot:', err);
       toast({
         title: 'Analysis failed',
-        description: error instanceof Error ? error.message : 'Failed to analyze screenshot',
+        description: err instanceof Error ? err.message : 'Failed to analyze screenshot',
         variant: 'destructive',
       });
     } finally {
@@ -293,9 +274,9 @@ export function UploadScreenshotDialog({
                     <div>
                       <p className="font-medium text-sm">{match.existingCard.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        •••• {match.existingCard.lastFiveDigits} | Balance: $
-                        {(match.existingCard.currentBalance || 0).toLocaleString()} → $
-                        {match.newBalance.toLocaleString()}
+                        •••• {match.existingCard.lastFiveDigits} | Balance: ${
+                          (match.existingCard.currentBalance || 0).toLocaleString()
+                        } → ${match.newBalance.toLocaleString()}
                       </p>
                     </div>
                     <RefreshCw className="w-4 h-4 text-accent" />
@@ -321,7 +302,9 @@ export function UploadScreenshotDialog({
                     <div>
                       <p className="font-medium text-sm">{card.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        •••• {card.lastFiveDigits} | Due: {card.dueDay}th | Balance: ${card.currentBalance?.toLocaleString()}
+                        •••• {card.lastFiveDigits} | Due: {card.dueDay}th | Balance: ${
+                          card.currentBalance?.toLocaleString()
+                        }
                       </p>
                     </div>
                     <Check className="w-4 h-4 text-success" />
