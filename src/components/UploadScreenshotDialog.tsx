@@ -51,12 +51,38 @@ export function UploadScreenshotDialog({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  const normalizeLastFiveDigits = (value: unknown): string => {
+    // Handles values like: 81008, "81008", "•••• 81008", "x81008\n", etc.
+    const raw =
+      typeof value === 'number'
+        ? String(Math.trunc(value))
+        : String(value ?? '');
+
+    const digitsOnly = raw.replace(/\D/g, '');
+    if (!digitsOnly) return '00000';
+
+    return digitsOnly.slice(-5).padStart(5, '0');
+  };
+
   const findExistingCard = (parsedCard: ParsedCard): CreditCard | null => {
+    const parsedDigits = normalizeLastFiveDigits(parsedCard.lastFiveDigits);
+
     // Match by last 5 digits first (most reliable)
-    const byDigits = existingCards.find(
-      (c) => c.lastFiveDigits === parsedCard.lastFiveDigits
-    );
-    if (byDigits) return byDigits;
+    if (parsedDigits !== '00000') {
+      const byDigits = existingCards.find(
+        (c) => normalizeLastFiveDigits(c.lastFiveDigits) === parsedDigits
+      );
+      if (byDigits) return byDigits;
+
+      // Fallback: match by last 4 digits (some issuers only show last 4)
+      const parsedLast4 = parsedDigits.slice(-4);
+      if (parsedLast4 !== '0000') {
+        const byLast4 = existingCards.find(
+          (c) => normalizeLastFiveDigits(c.lastFiveDigits).slice(-4) === parsedLast4
+        );
+        if (byLast4) return byLast4;
+      }
+    }
 
     // Match by name (fuzzy - check if names are similar)
     const byName = existingCards.find((c) => {
@@ -102,7 +128,7 @@ export function UploadScreenshotDialog({
       if (data.cards && data.cards.length > 0) {
         const parsedCards: ParsedCard[] = data.cards.map((card: any, index: number) => ({
           name: card.name || 'Unknown Card',
-          lastFiveDigits: String(card.lastFiveDigits || '00000').slice(-5).padStart(5, '0'),
+          lastFiveDigits: normalizeLastFiveDigits(card.lastFiveDigits),
           closingDay: Math.min(31, Math.max(1, parseInt(card.closingDay) || 15)),
           dueDay: Math.min(31, Math.max(1, parseInt(card.dueDay) || 22)),
           color: cardColors[index % cardColors.length],
