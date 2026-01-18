@@ -156,6 +156,15 @@ export type Database = {
     }
     Functions: {
       create_team_with_owner: { Args: { team_name: string }; Returns: string }
+      get_team_role: {
+        Args: { check_team_id: string; user_uuid: string }
+        Returns: string
+      }
+      get_user_team_ids: { Args: { user_uuid: string }; Returns: string[] }
+      is_team_member: {
+        Args: { check_team_id: string; user_uuid: string }
+        Returns: boolean
+      }
       join_team_by_invite: { Args: { code: string }; Returns: string }
     }
     Enums: {
