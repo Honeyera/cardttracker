@@ -29,7 +29,7 @@ export function DashboardStats({ cards }: DashboardStatsProps) {
       label: 'Due This Week',
       value: cardsDueThisWeek.length.toString(),
       icon: AlertTriangle,
-      color: cardsDueThisWeek.length > 0 ? 'warning' as const : 'success' as const,
+      color: 'warning' as const,
       subtext: cardsDueThisWeek.length > 0 
         ? cardsDueThisWeek.map(c => c.name).join(', ')
         : 'No payments due',
