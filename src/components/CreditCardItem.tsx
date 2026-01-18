@@ -55,6 +55,16 @@ export function CreditCardItem({ card, onEdit, onDelete }: CreditCardItemProps) 
           </p>
         </div>
 
+        {/* Wait to Purchase Indicator */}
+        {closingUrgency === 'urgent' && (
+          <div className="flex items-center gap-1.5 bg-amber-500/30 backdrop-blur-sm rounded-lg px-2 py-1.5 mb-3">
+            <AlertCircle className="w-3.5 h-3.5 text-amber-200" />
+            <span className="text-[11px] font-medium text-amber-100">
+              Closing soon — consider waiting to purchase
+            </span>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-4">
           <DateBadge
             label="Closing Date"
