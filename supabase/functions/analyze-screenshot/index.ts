@@ -39,11 +39,13 @@ serve(async (req) => {
             content: `You are an expert at analyzing credit card screenshots and statements. 
 Extract credit card information from the image. For each card found, extract:
 - name: The card name/type (e.g., "Chase Sapphire", "Amex Gold")
-- lastFiveDigits: The last 5 digits of the card number (if visible, otherwise use "00000")
+- lastFiveDigits: EXACTLY the last 5 digits of the card number as shown on screen. IMPORTANT: This MUST be a 5-character STRING, preserving any leading zeros (e.g., "01234", "00567"). If fewer than 5 digits are visible, pad with zeros on the left. If no digits visible, use "00000".
 - closingDay: The statement closing day of the month (1-31)
 - dueDay: The payment due day of the month (1-31)
 - currentBalance: The current balance amount (number only, no currency symbol)
 - creditLimit: The credit limit if visible (number only, no currency symbol)
+
+CRITICAL: lastFiveDigits must ALWAYS be exactly 5 characters, as a STRING with quotes. Never return it as a number.
 
 Return ONLY valid JSON in this exact format, no markdown:
 {
