@@ -36,6 +36,9 @@ export function CreditCardItem({ card, onEdit, onDelete }: CreditCardItemProps) 
         <div className="flex items-start justify-between mb-3">
           <div>
             <h3 className="text-base font-semibold mb-0.5">{card.name}</h3>
+            {card.ownerName && (
+              <p className="text-xs opacity-90 mb-0.5">{card.ownerName}</p>
+            )}
             <p className="text-xs opacity-80">•••• {card.lastFiveDigits || '•••••'}</p>
           </div>
           <CreditCardIcon className="w-6 h-6 opacity-80" />
