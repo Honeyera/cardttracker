@@ -42,6 +42,7 @@ export function AddCardDialog({
   const [dueDay, setDueDay] = useState('');
   const [color, setColor] = useState<CardColor>('navy');
   const [creditLimit, setCreditLimit] = useState('');
+  const [currentBalance, setCurrentBalance] = useState('');
 
   useEffect(() => {
     if (editCard) {
@@ -51,6 +52,7 @@ export function AddCardDialog({
       setDueDay(editCard.dueDay.toString());
       setColor(editCard.color);
       setCreditLimit(editCard.creditLimit?.toString() || '');
+      setCurrentBalance(editCard.currentBalance?.toString() || '');
     } else {
       resetForm();
     }
@@ -63,6 +65,7 @@ export function AddCardDialog({
     setDueDay('');
     setColor('navy');
     setCreditLimit('');
+    setCurrentBalance('');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -74,7 +77,8 @@ export function AddCardDialog({
       closingDay: parseInt(closingDay),
       dueDay: parseInt(dueDay),
       color,
-      creditLimit: creditLimit ? parseInt(creditLimit) : undefined,
+      creditLimit: creditLimit ? parseFloat(creditLimit) : undefined,
+      currentBalance: currentBalance ? parseFloat(currentBalance) : undefined,
     };
 
     if (editCard && onUpdate) {
@@ -164,15 +168,28 @@ export function AddCardDialog({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="limit">Credit Limit (optional)</Label>
-            <Input
-              id="limit"
-              type="number"
-              placeholder="10000"
-              value={creditLimit}
-              onChange={(e) => setCreditLimit(e.target.value)}
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="balance">Current Balance</Label>
+              <Input
+                id="balance"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={currentBalance}
+                onChange={(e) => setCurrentBalance(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="limit">Credit Limit</Label>
+              <Input
+                id="limit"
+                type="number"
+                placeholder="10000"
+                value={creditLimit}
+                onChange={(e) => setCreditLimit(e.target.value)}
+              />
+            </div>
           </div>
 
           <div className="space-y-2">

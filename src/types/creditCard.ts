@@ -6,6 +6,7 @@ export interface CreditCard {
   dueDay: number; // Day of month (1-31)
   color: 'navy' | 'teal' | 'slate' | 'ocean';
   creditLimit?: number;
+  currentBalance?: number;
 }
 
 export type CardColor = CreditCard['color'];

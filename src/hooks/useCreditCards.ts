@@ -12,6 +12,7 @@ const defaultCards: CreditCard[] = [
     dueDay: 22,
     color: 'navy',
     creditLimit: 10000,
+    currentBalance: 2450,
   },
   {
     id: '2',
@@ -21,6 +22,7 @@ const defaultCards: CreditCard[] = [
     dueDay: 12,
     color: 'teal',
     creditLimit: 15000,
+    currentBalance: 890,
   },
 ];
 

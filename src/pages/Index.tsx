@@ -3,6 +3,7 @@ import { useCreditCards } from '@/hooks/useCreditCards';
 import { CreditCardItem } from '@/components/CreditCardItem';
 import { AddCardDialog } from '@/components/AddCardDialog';
 import { UpcomingDates } from '@/components/UpcomingDates';
+import { DashboardStats } from '@/components/DashboardStats';
 import { Button } from '@/components/ui/button';
 import { Plus, CreditCard, Wallet } from 'lucide-react';
 import { CreditCard as CreditCardType } from '@/types/creditCard';
@@ -49,6 +50,9 @@ const Index = () => {
 
       {/* Main Content */}
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+        {/* Dashboard Stats */}
+        <DashboardStats cards={cards} />
+
         {/* Upcoming Dates Section */}
         <UpcomingDates cards={cards} />
 
