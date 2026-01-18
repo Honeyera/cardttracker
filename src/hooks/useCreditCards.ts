@@ -17,6 +17,7 @@ type DbCard = {
   due_date: number | null;
   credit_limit: number | null;
   current_balance: number | null;
+  display_order: number | null;
   created_at: string;
 };
 
@@ -28,7 +29,6 @@ function dbToModel(card: DbCard): CreditCard {
     lastFiveDigits: card.last_four || '00000',
     closingDay: card.statement_date || 1,
     dueDay: card.due_date || 15,
-    // We store the theme color in `network` for now.
     color: (card.network as CreditCard['color']) || 'navy',
     creditLimit: Number(card.credit_limit) || 0,
     currentBalance: Number(card.current_balance) || 0,
@@ -67,11 +67,11 @@ export function useCreditCards() {
     const loadAndMaybeMigrate = async () => {
       setLoading(true);
 
-      // 1) Fetch current cards from database
+      // Fetch current cards from database, ordered by display_order
       const { data, error } = await supabase
         .from('credit_cards')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('display_order', { ascending: true });
 
       if (error) {
         console.error('Error fetching cards:', error);
@@ -84,7 +84,7 @@ export function useCreditCards() {
       const dbCards = (data || []) as unknown as DbCard[];
       setCards(dbCards.map(dbToModel));
 
-      // 2) One-time import from legacy localStorage (cards saved before login/sync existed)
+      // One-time import from legacy localStorage
       try {
         const alreadyMigrated = migratedFlagKey
           ? localStorage.getItem(migratedFlagKey) === '1'
@@ -97,12 +97,14 @@ export function useCreditCards() {
             const legacyCards: any[] = Array.isArray(parsed) ? parsed : [];
 
             const existingKeys = new Set(dbCards.map(getDbCardKey));
+            const maxOrder = dbCards.reduce((max, c) => Math.max(max, c.display_order || 0), 0);
+            
             const toImport = legacyCards
               .filter((c) => {
                 const key = getLegacyCardKey(c);
                 return key !== '|' && !existingKeys.has(key);
               })
-              .map((c) => ({
+              .map((c, idx) => ({
                 user_id: user.id,
                 name: String(c?.name ?? '').trim() || 'Untitled Card',
                 owner_name: String(c?.ownerName ?? '').trim(),
@@ -112,6 +114,7 @@ export function useCreditCards() {
                 due_date: Number(c?.dueDay ?? 15) || 15,
                 credit_limit: Number(c?.creditLimit ?? 0) || 0,
                 current_balance: Number(c?.currentBalance ?? 0) || 0,
+                display_order: maxOrder + idx + 1,
               }));
 
             if (toImport.length > 0) {
@@ -121,11 +124,10 @@ export function useCreditCards() {
 
               if (!insertError) {
                 toast.success(`Imported ${toImport.length} card(s) from this device`);
-                // Re-fetch to show imported cards
                 const { data: refreshed } = await supabase
                   .from('credit_cards')
                   .select('*')
-                  .order('created_at', { ascending: false });
+                  .order('display_order', { ascending: true });
                 setCards(((refreshed || []) as unknown as DbCard[]).map(dbToModel));
               } else {
                 console.error('Error importing legacy cards:', insertError);
@@ -133,12 +135,10 @@ export function useCreditCards() {
               }
             }
 
-            // Mark as migrated even if nothing to import, to prevent repeated attempts.
             localStorage.setItem(migratedFlagKey, '1');
           }
         }
       } catch {
-        // If legacy storage is malformed, just skip it.
         if (migratedFlagKey) localStorage.setItem(migratedFlagKey, '1');
       }
 
@@ -154,6 +154,9 @@ export function useCreditCards() {
       return;
     }
 
+    // Get max display_order to add new card at the end
+    const maxOrder = cards.length;
+
     const { data, error } = await supabase
       .from('credit_cards')
       .insert({
@@ -166,6 +169,7 @@ export function useCreditCards() {
         due_date: card.dueDay,
         credit_limit: card.creditLimit || 0,
         current_balance: card.currentBalance || 0,
+        display_order: maxOrder + 1,
       })
       .select()
       .single();
@@ -174,7 +178,7 @@ export function useCreditCards() {
       console.error('Error adding card:', error);
       toast.error('Failed to add card');
     } else if (data) {
-      setCards((prev) => [dbToModel(data as unknown as DbCard), ...prev]);
+      setCards((prev) => [...prev, dbToModel(data as unknown as DbCard)]);
       toast.success('Card added successfully');
     }
   };
@@ -222,6 +226,40 @@ export function useCreditCards() {
     }
   };
 
-  return { cards, loading, addCard, updateCard, deleteCard };
-}
+  const reorderCards = async (reorderedCards: CreditCard[]) => {
+    if (!user) return;
 
+    // Optimistically update the UI
+    setCards(reorderedCards);
+
+    // Update the display_order for each card in the database
+    const updates = reorderedCards.map((card, index) => ({
+      id: card.id,
+      display_order: index,
+    }));
+
+    // Update each card's display_order
+    for (const update of updates) {
+      const { error } = await supabase
+        .from('credit_cards')
+        .update({ display_order: update.display_order })
+        .eq('id', update.id);
+
+      if (error) {
+        console.error('Error updating card order:', error);
+        // Refetch to restore correct order on error
+        const { data } = await supabase
+          .from('credit_cards')
+          .select('*')
+          .order('display_order', { ascending: true });
+        if (data) {
+          setCards((data as unknown as DbCard[]).map(dbToModel));
+        }
+        toast.error('Failed to save card order');
+        return;
+      }
+    }
+  };
+
+  return { cards, loading, addCard, updateCard, deleteCard, reorderCards };
+}

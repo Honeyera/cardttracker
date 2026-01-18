@@ -1,8 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable';
 import { useCreditCards } from '@/hooks/useCreditCards';
 import { useAuth } from '@/contexts/AuthContext';
-import { CreditCardItem } from '@/components/CreditCardItem';
+import { SortableCardItem } from '@/components/SortableCardItem';
 import { AddCardDialog } from '@/components/AddCardDialog';
 import { UploadScreenshotDialog } from '@/components/UploadScreenshotDialog';
 import { UpcomingDates } from '@/components/UpcomingDates';
@@ -12,12 +27,23 @@ import { Plus, CreditCard, Wallet, Upload, LogOut, Loader2 } from 'lucide-react'
 import { CreditCard as CreditCardType } from '@/types/creditCard';
 
 const Index = () => {
-  const { cards, loading: cardsLoading, addCard, updateCard, deleteCard } = useCreditCards();
+  const { cards, loading: cardsLoading, addCard, updateCard, deleteCard, reorderCards } = useCreditCards();
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<CreditCardType | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -50,6 +76,17 @@ const Index = () => {
   const handleSignOut = async () => {
     await signOut();
     navigate('/auth');
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = cards.findIndex((card) => card.id === active.id);
+      const newIndex = cards.findIndex((card) => card.id === over.id);
+      const reordered = arrayMove(cards, oldIndex, newIndex);
+      reorderCards(reordered);
+    }
   };
 
   if (authLoading || (!user && !authLoading)) {
@@ -102,6 +139,9 @@ const Index = () => {
           <div className="flex items-center gap-2 mb-4">
             <CreditCard className="w-5 h-5 text-primary" />
             <h2 className="text-lg font-semibold text-foreground">Your Cards</h2>
+            {cards.length > 1 && (
+              <span className="text-xs text-muted-foreground ml-2">(drag to reorder)</span>
+            )}
           </div>
 
           {cardsLoading ? (
@@ -123,22 +163,34 @@ const Index = () => {
               </Button>
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {cards.map((card) => (
-                <CreditCardItem
-                  key={card.id}
-                  card={card}
-                  onEdit={handleEdit}
-                  onDelete={deleteCard}
-                />
-              ))}
-            </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={cards.map((card) => card.id)}
+                strategy={rectSortingStrategy}
+              >
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {cards.map((card) => (
+                    <SortableCardItem
+                      key={card.id}
+                      card={card}
+                      onEdit={handleEdit}
+                      onDelete={deleteCard}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
           )}
         </div>
 
         {/* Upcoming Dates Section */}
         <UpcomingDates cards={cards} />
       </main>
+
       {/* Add/Edit Card Dialog */}
       <AddCardDialog
         open={dialogOpen}
