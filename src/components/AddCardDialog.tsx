@@ -47,7 +47,7 @@ export function AddCardDialog({
   useEffect(() => {
     if (editCard) {
       setName(editCard.name);
-      setLastFiveDigits(editCard.lastFiveDigits);
+      setLastFiveDigits(editCard.lastFiveDigits || '');
       setClosingDay(editCard.closingDay.toString());
       setDueDay(editCard.dueDay.toString());
       setColor(editCard.color);

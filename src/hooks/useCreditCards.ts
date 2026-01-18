@@ -29,7 +29,15 @@ const defaultCards: CreditCard[] = [
 export function useCreditCards() {
   const [cards, setCards] = useState<CreditCard[]>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : defaultCards;
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Migrate old cards with lastFourDigits to lastFiveDigits
+      return parsed.map((card: any) => ({
+        ...card,
+        lastFiveDigits: card.lastFiveDigits || card.lastFourDigits || '00000',
+      }));
+    }
+    return defaultCards;
   });
 
   useEffect(() => {
