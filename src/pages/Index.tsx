@@ -30,6 +30,12 @@ const Index = () => {
     newCards.forEach((card) => addCard(card));
   };
 
+  const handleCardsUpdated = (updates: { id: string; currentBalance: number }[]) => {
+    updates.forEach(({ id, currentBalance }) => {
+      updateCard(id, { currentBalance });
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -117,7 +123,9 @@ const Index = () => {
       <UploadScreenshotDialog
         open={uploadDialogOpen}
         onOpenChange={setUploadDialogOpen}
+        existingCards={cards}
         onCardsFound={handleCardsFromScreenshot}
+        onCardsUpdated={handleCardsUpdated}
       />
     </div>
   );

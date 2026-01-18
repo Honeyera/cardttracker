@@ -7,7 +7,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Upload, Loader2, ImageIcon, Check, X } from 'lucide-react';
+import { Upload, Loader2, ImageIcon, Check, RefreshCw, Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { CreditCard, CardColor } from '@/types/creditCard';
 import { useToast } from '@/hooks/use-toast';
@@ -15,27 +15,68 @@ import { useToast } from '@/hooks/use-toast';
 interface UploadScreenshotDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCardsFound: (cards: Omit<CreditCard, 'id'>[]) => void;
+  existingCards: CreditCard[];
+  onCardsFound: (newCards: Omit<CreditCard, 'id'>[]) => void;
+  onCardsUpdated: (updates: { id: string; currentBalance: number }[]) => void;
 }
 
-const cardColors: CardColor[] = ['navy', 'teal', 'slate', 'ocean'];
+interface MatchedCard {
+  existingCard: CreditCard;
+  newBalance: number;
+}
+
+interface ParsedCard {
+  name: string;
+  lastFiveDigits: string;
+  closingDay: number;
+  dueDay: number;
+  color: CardColor;
+  currentBalance: number;
+  creditLimit?: number;
+}
+
+const cardColors: CardColor[] = ['navy', 'teal', 'slate', 'ocean', 'gold', 'rose', 'purple', 'emerald'];
 
 export function UploadScreenshotDialog({
   open,
   onOpenChange,
+  existingCards,
   onCardsFound,
+  onCardsUpdated,
 }: UploadScreenshotDialogProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [foundCards, setFoundCards] = useState<Omit<CreditCard, 'id'>[] | null>(null);
+  const [newCards, setNewCards] = useState<ParsedCard[]>([]);
+  const [matchedCards, setMatchedCards] = useState<MatchedCard[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  const findExistingCard = (parsedCard: ParsedCard): CreditCard | null => {
+    // Match by last 5 digits first (most reliable)
+    const byDigits = existingCards.find(
+      (c) => c.lastFiveDigits === parsedCard.lastFiveDigits
+    );
+    if (byDigits) return byDigits;
+
+    // Match by name (fuzzy - check if names are similar)
+    const byName = existingCards.find((c) => {
+      const existingName = c.name.toLowerCase().trim();
+      const parsedName = parsedCard.name.toLowerCase().trim();
+      return (
+        existingName === parsedName ||
+        existingName.includes(parsedName) ||
+        parsedName.includes(existingName)
+      );
+    });
+    if (byName) return byName;
+
+    return null;
+  };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Create preview
     const reader = new FileReader();
     reader.onload = async (event) => {
       const base64 = event.target?.result as string;
@@ -47,24 +88,19 @@ export function UploadScreenshotDialog({
 
   const analyzeImage = async (imageBase64: string) => {
     setIsAnalyzing(true);
-    setFoundCards(null);
+    setNewCards([]);
+    setMatchedCards([]);
 
     try {
       const { data, error } = await supabase.functions.invoke('analyze-screenshot', {
         body: { imageBase64 },
       });
 
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      if (data.error) {
-        throw new Error(data.error);
-      }
+      if (error) throw new Error(error.message);
+      if (data.error) throw new Error(data.error);
 
       if (data.cards && data.cards.length > 0) {
-        // Assign colors to cards
-        const cardsWithColors = data.cards.map((card: any, index: number) => ({
+        const parsedCards: ParsedCard[] = data.cards.map((card: any, index: number) => ({
           name: card.name || 'Unknown Card',
           lastFiveDigits: String(card.lastFiveDigits || '00000').slice(-5).padStart(5, '0'),
           closingDay: Math.min(31, Math.max(1, parseInt(card.closingDay) || 15)),
@@ -73,7 +109,32 @@ export function UploadScreenshotDialog({
           currentBalance: parseFloat(card.currentBalance) || 0,
           creditLimit: card.creditLimit ? parseFloat(card.creditLimit) : undefined,
         }));
-        setFoundCards(cardsWithColors);
+
+        const newCardsList: ParsedCard[] = [];
+        const matchedCardsList: MatchedCard[] = [];
+
+        parsedCards.forEach((parsedCard) => {
+          const existing = findExistingCard(parsedCard);
+          if (existing) {
+            matchedCardsList.push({
+              existingCard: existing,
+              newBalance: parsedCard.currentBalance,
+            });
+          } else {
+            newCardsList.push(parsedCard);
+          }
+        });
+
+        setNewCards(newCardsList);
+        setMatchedCards(matchedCardsList);
+
+        if (newCardsList.length === 0 && matchedCardsList.length === 0) {
+          toast({
+            title: 'No cards found',
+            description: 'Could not detect any credit cards in the image.',
+            variant: 'destructive',
+          });
+        }
       } else {
         toast({
           title: 'No cards found',
@@ -94,19 +155,40 @@ export function UploadScreenshotDialog({
   };
 
   const handleConfirm = () => {
-    if (foundCards) {
-      onCardsFound(foundCards);
-      toast({
-        title: 'Cards added!',
-        description: `Successfully added ${foundCards.length} card${foundCards.length > 1 ? 's' : ''}.`,
-      });
-      handleClose();
+    // Update existing cards
+    if (matchedCards.length > 0) {
+      const updates = matchedCards.map((m) => ({
+        id: m.existingCard.id,
+        currentBalance: m.newBalance,
+      }));
+      onCardsUpdated(updates);
     }
+
+    // Add new cards
+    if (newCards.length > 0) {
+      onCardsFound(newCards);
+    }
+
+    const messages: string[] = [];
+    if (matchedCards.length > 0) {
+      messages.push(`Updated ${matchedCards.length} card${matchedCards.length > 1 ? 's' : ''}`);
+    }
+    if (newCards.length > 0) {
+      messages.push(`Added ${newCards.length} new card${newCards.length > 1 ? 's' : ''}`);
+    }
+
+    toast({
+      title: 'Success!',
+      description: messages.join(' and ') + '.',
+    });
+
+    handleClose();
   };
 
   const handleClose = () => {
     setPreviewUrl(null);
-    setFoundCards(null);
+    setNewCards([]);
+    setMatchedCards([]);
     setIsAnalyzing(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -114,13 +196,15 @@ export function UploadScreenshotDialog({
     onOpenChange(false);
   };
 
+  const totalCards = newCards.length + matchedCards.length;
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Upload Screenshot</DialogTitle>
           <DialogDescription>
-            Upload a screenshot of your credit cards or statements to automatically add them.
+            Upload a screenshot to add new cards or update balances on existing ones.
           </DialogDescription>
         </DialogHeader>
 
@@ -164,17 +248,46 @@ export function UploadScreenshotDialog({
             </div>
           )}
 
-          {/* Found Cards */}
-          {foundCards && foundCards.length > 0 && (
+          {/* Matched Cards (Updates) */}
+          {matchedCards.length > 0 && (
             <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">
-                Found {foundCards.length} card{foundCards.length > 1 ? 's' : ''}:
+              <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-accent" />
+                Updating {matchedCards.length} existing card{matchedCards.length > 1 ? 's' : ''}:
               </p>
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {foundCards.map((card, index) => (
+              <div className="space-y-2 max-h-32 overflow-y-auto">
+                {matchedCards.map((match, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between p-3 bg-muted rounded-lg"
+                    className="flex items-center justify-between p-3 bg-accent/10 border border-accent/20 rounded-lg"
+                  >
+                    <div>
+                      <p className="font-medium text-sm">{match.existingCard.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        •••• {match.existingCard.lastFiveDigits} | Balance: $
+                        {(match.existingCard.currentBalance || 0).toLocaleString()} → $
+                        {match.newBalance.toLocaleString()}
+                      </p>
+                    </div>
+                    <RefreshCw className="w-4 h-4 text-accent" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* New Cards */}
+          {newCards.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                <Plus className="w-4 h-4 text-success" />
+                Adding {newCards.length} new card{newCards.length > 1 ? 's' : ''}:
+              </p>
+              <div className="space-y-2 max-h-32 overflow-y-auto">
+                {newCards.map((card, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-3 bg-success/10 border border-success/20 rounded-lg"
                   >
                     <div>
                       <p className="font-medium text-sm">{card.name}</p>
@@ -194,9 +307,9 @@ export function UploadScreenshotDialog({
             <Button variant="outline" onClick={handleClose} className="flex-1">
               Cancel
             </Button>
-            {foundCards && foundCards.length > 0 ? (
+            {totalCards > 0 ? (
               <Button onClick={handleConfirm} className="flex-1">
-                Add {foundCards.length} Card{foundCards.length > 1 ? 's' : ''}
+                Confirm Changes
               </Button>
             ) : (
               <Button
