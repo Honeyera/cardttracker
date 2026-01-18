@@ -1,19 +1,29 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useCreditCards } from '@/hooks/useCreditCards';
+import { useAuth } from '@/contexts/AuthContext';
 import { CreditCardItem } from '@/components/CreditCardItem';
 import { AddCardDialog } from '@/components/AddCardDialog';
 import { UploadScreenshotDialog } from '@/components/UploadScreenshotDialog';
 import { UpcomingDates } from '@/components/UpcomingDates';
 import { DashboardStats } from '@/components/DashboardStats';
 import { Button } from '@/components/ui/button';
-import { Plus, CreditCard, Wallet, Upload } from 'lucide-react';
+import { Plus, CreditCard, Wallet, Upload, LogOut, Loader2 } from 'lucide-react';
 import { CreditCard as CreditCardType } from '@/types/creditCard';
 
 const Index = () => {
-  const { cards, addCard, updateCard, deleteCard } = useCreditCards();
+  const { cards, loading: cardsLoading, addCard, updateCard, deleteCard } = useCreditCards();
+  const { user, loading: authLoading, signOut } = useAuth();
+  const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<CreditCardType | null>(null);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/auth');
+    }
+  }, [user, authLoading, navigate]);
 
   const handleEdit = (card: CreditCardType) => {
     setEditingCard(card);
@@ -26,6 +36,7 @@ const Index = () => {
       setEditingCard(null);
     }
   };
+
   const handleCardsFromScreenshot = (newCards: Omit<CreditCardType, 'id'>[]) => {
     newCards.forEach((card) => addCard(card));
   };
@@ -35,6 +46,19 @@ const Index = () => {
       updateCard(id, { currentBalance });
     });
   };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/auth');
+  };
+
+  if (authLoading || (!user && !authLoading)) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -61,6 +85,9 @@ const Index = () => {
               <Plus className="w-4 h-4 mr-1" />
               Add Card
             </Button>
+            <Button onClick={handleSignOut} size="sm" variant="ghost">
+              <LogOut className="w-4 h-4" />
+            </Button>
           </div>
         </div>
       </header>
@@ -77,7 +104,11 @@ const Index = () => {
             <h2 className="text-lg font-semibold text-foreground">Your Cards</h2>
           </div>
 
-          {cards.length === 0 ? (
+          {cardsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : cards.length === 0 ? (
             <div className="bg-card rounded-2xl p-12 text-center border border-dashed border-border">
               <CreditCard className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium text-foreground mb-2">
