@@ -83,7 +83,7 @@ interface DateBadgeProps {
 
 function DateBadge({ label, date, daysUntil, urgency }: DateBadgeProps) {
   return (
-    <div className="bg-white/15 backdrop-blur-sm rounded-lg p-2">
+    <div className="bg-blue-500/30 backdrop-blur-sm rounded-lg p-2">
       <div className="flex items-center gap-1 mb-0.5">
         {urgency === 'urgent' && (
           <AlertCircle className="w-3 h-3 text-red-300" />
