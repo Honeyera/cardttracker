@@ -2,15 +2,17 @@ import { useState } from 'react';
 import { useCreditCards } from '@/hooks/useCreditCards';
 import { CreditCardItem } from '@/components/CreditCardItem';
 import { AddCardDialog } from '@/components/AddCardDialog';
+import { UploadScreenshotDialog } from '@/components/UploadScreenshotDialog';
 import { UpcomingDates } from '@/components/UpcomingDates';
 import { DashboardStats } from '@/components/DashboardStats';
 import { Button } from '@/components/ui/button';
-import { Plus, CreditCard, Wallet } from 'lucide-react';
+import { Plus, CreditCard, Wallet, Upload } from 'lucide-react';
 import { CreditCard as CreditCardType } from '@/types/creditCard';
 
 const Index = () => {
   const { cards, addCard, updateCard, deleteCard } = useCreditCards();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<CreditCardType | null>(null);
 
   const handleEdit = (card: CreditCardType) => {
@@ -23,6 +25,9 @@ const Index = () => {
     if (!open) {
       setEditingCard(null);
     }
+  };
+  const handleCardsFromScreenshot = (newCards: Omit<CreditCardType, 'id'>[]) => {
+    newCards.forEach((card) => addCard(card));
   };
 
   return (
@@ -41,10 +46,16 @@ const Index = () => {
               </p>
             </div>
           </div>
-          <Button onClick={() => setDialogOpen(true)} size="sm">
-            <Plus className="w-4 h-4 mr-1" />
-            Add Card
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setUploadDialogOpen(true)} size="sm" variant="outline">
+              <Upload className="w-4 h-4 mr-1" />
+              Upload Screenshot
+            </Button>
+            <Button onClick={() => setDialogOpen(true)} size="sm">
+              <Plus className="w-4 h-4 mr-1" />
+              Add Card
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -100,6 +111,13 @@ const Index = () => {
         onUpdate={updateCard}
         onDelete={deleteCard}
         editCard={editingCard}
+      />
+
+      {/* Upload Screenshot Dialog */}
+      <UploadScreenshotDialog
+        open={uploadDialogOpen}
+        onOpenChange={setUploadDialogOpen}
+        onCardsFound={handleCardsFromScreenshot}
       />
     </div>
   );
