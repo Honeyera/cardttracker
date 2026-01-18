@@ -7,7 +7,7 @@ const defaultCards: CreditCard[] = [
   {
     id: '1',
     name: 'Chase Sapphire',
-    lastFourDigits: '4521',
+    lastFiveDigits: '84521',
     closingDay: 15,
     dueDay: 22,
     color: 'navy',
@@ -17,7 +17,7 @@ const defaultCards: CreditCard[] = [
   {
     id: '2',
     name: 'Amex Gold',
-    lastFourDigits: '3782',
+    lastFiveDigits: '93782',
     closingDay: 5,
     dueDay: 12,
     color: 'teal',

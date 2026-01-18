@@ -1,7 +1,7 @@
 export interface CreditCard {
   id: string;
   name: string;
-  lastFourDigits: string;
+  lastFiveDigits: string;
   closingDay: number; // Day of month (1-31)
   dueDay: number; // Day of month (1-31)
   color: 'navy' | 'teal' | 'slate' | 'ocean';

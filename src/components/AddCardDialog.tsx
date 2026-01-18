@@ -37,7 +37,7 @@ export function AddCardDialog({
   editCard,
 }: AddCardDialogProps) {
   const [name, setName] = useState('');
-  const [lastFourDigits, setLastFourDigits] = useState('');
+  const [lastFiveDigits, setLastFiveDigits] = useState('');
   const [closingDay, setClosingDay] = useState('');
   const [dueDay, setDueDay] = useState('');
   const [color, setColor] = useState<CardColor>('navy');
@@ -47,7 +47,7 @@ export function AddCardDialog({
   useEffect(() => {
     if (editCard) {
       setName(editCard.name);
-      setLastFourDigits(editCard.lastFourDigits);
+      setLastFiveDigits(editCard.lastFiveDigits);
       setClosingDay(editCard.closingDay.toString());
       setDueDay(editCard.dueDay.toString());
       setColor(editCard.color);
@@ -60,7 +60,7 @@ export function AddCardDialog({
 
   const resetForm = () => {
     setName('');
-    setLastFourDigits('');
+    setLastFiveDigits('');
     setClosingDay('');
     setDueDay('');
     setColor('navy');
@@ -73,7 +73,7 @@ export function AddCardDialog({
 
     const cardData = {
       name,
-      lastFourDigits,
+      lastFiveDigits,
       closingDay: parseInt(closingDay),
       dueDay: parseInt(dueDay),
       color,
@@ -101,7 +101,7 @@ export function AddCardDialog({
 
   const isValid =
     name &&
-    lastFourDigits.length === 4 &&
+    lastFiveDigits.length === 5 &&
     closingDay &&
     dueDay &&
     parseInt(closingDay) >= 1 &&
@@ -129,14 +129,14 @@ export function AddCardDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="digits">Last 4 Digits</Label>
+            <Label htmlFor="digits">Last 5 Digits</Label>
             <Input
               id="digits"
-              placeholder="1234"
-              maxLength={4}
-              value={lastFourDigits}
+              placeholder="12345"
+              maxLength={5}
+              value={lastFiveDigits}
               onChange={(e) =>
-                setLastFourDigits(e.target.value.replace(/\D/g, ''))
+                setLastFiveDigits(e.target.value.replace(/\D/g, ''))
               }
             />
           </div>
