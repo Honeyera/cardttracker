@@ -3,9 +3,12 @@ import { CreditCard } from '@/types/creditCard';
 
 const STORAGE_KEY = 'credit-cards';
 
+// Generate unique ID
+const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
 const defaultCards: CreditCard[] = [
   {
-    id: '1',
+    id: generateId(),
     name: 'Chase Sapphire',
     lastFiveDigits: '84521',
     closingDay: 15,
@@ -15,7 +18,7 @@ const defaultCards: CreditCard[] = [
     currentBalance: 2450,
   },
   {
-    id: '2',
+    id: generateId(),
     name: 'Amex Gold',
     lastFiveDigits: '93782',
     closingDay: 5,
@@ -31,11 +34,25 @@ export function useCreditCards() {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      // Migrate old cards with lastFourDigits to lastFiveDigits
-      return parsed.map((card: any) => ({
-        ...card,
-        lastFiveDigits: card.lastFiveDigits || card.lastFourDigits || '00000',
-      }));
+      // Track seen IDs to detect duplicates
+      const seenIds = new Set<string>();
+      
+      // Migrate old cards and ensure unique IDs
+      return parsed.map((card: any) => {
+        let cardId = card.id;
+        
+        // If ID is missing or duplicate, generate a new one
+        if (!cardId || seenIds.has(cardId)) {
+          cardId = generateId();
+        }
+        seenIds.add(cardId);
+        
+        return {
+          ...card,
+          id: cardId,
+          lastFiveDigits: card.lastFiveDigits || card.lastFourDigits || '00000',
+        };
+      });
     }
     return defaultCards;
   });
@@ -47,7 +64,7 @@ export function useCreditCards() {
   const addCard = (card: Omit<CreditCard, 'id'>) => {
     const newCard: CreditCard = {
       ...card,
-      id: Date.now().toString(),
+      id: generateId(),
     };
     setCards((prev) => [...prev, newCard]);
   };
