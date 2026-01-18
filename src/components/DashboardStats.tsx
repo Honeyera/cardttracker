@@ -17,13 +17,24 @@ export function DashboardStats({ cards }: DashboardStatsProps) {
   
   const totalBalance = cards.reduce((sum, card) => sum + (card.currentBalance || 0), 0);
 
+  // Group cards by owner name
+  const ownerCounts = cards.reduce((acc, card) => {
+    const owner = card.ownerName || 'Unassigned';
+    acc[owner] = (acc[owner] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const ownerSummary = Object.entries(ownerCounts)
+    .map(([name, count]) => `${name}: ${count}`)
+    .join(', ');
+
   const stats = [
     {
       label: 'Total Cards',
       value: totalCards.toString(),
       icon: CardIcon,
       color: 'primary' as const,
-      subtext: totalCards === 1 ? 'credit card' : 'credit cards',
+      subtext: ownerSummary || (totalCards === 1 ? 'credit card' : 'credit cards'),
     },
     {
       label: 'Due This Week',
