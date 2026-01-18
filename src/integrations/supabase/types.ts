@@ -21,6 +21,7 @@ export type Database = {
           created_at: string
           credit_limit: number | null
           current_balance: number | null
+          display_order: number | null
           due_date: number | null
           id: string
           image_url: string | null
@@ -40,6 +41,7 @@ export type Database = {
           created_at?: string
           credit_limit?: number | null
           current_balance?: number | null
+          display_order?: number | null
           due_date?: number | null
           id?: string
           image_url?: string | null
@@ -59,6 +61,7 @@ export type Database = {
           created_at?: string
           credit_limit?: number | null
           current_balance?: number | null
+          display_order?: number | null
           due_date?: number | null
           id?: string
           image_url?: string | null
