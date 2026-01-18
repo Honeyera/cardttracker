@@ -20,31 +20,31 @@ export function CreditCardItem({ card, onEdit, onDelete }: CreditCardItemProps) 
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-2xl p-6 text-primary-foreground bg-gradient-to-br shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-[1.02] cursor-pointer',
+        'relative overflow-hidden rounded-xl p-4 text-primary-foreground bg-gradient-to-br shadow-md transition-all duration-300 hover:shadow-lg hover:scale-[1.02] cursor-pointer',
         cardColorClasses[card.color]
       )}
       onClick={() => onEdit(card)}
     >
       {/* Card Pattern Overlay */}
       <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-4 right-4 w-24 h-24 rounded-full border-2 border-current" />
-        <div className="absolute top-8 right-8 w-16 h-16 rounded-full border-2 border-current" />
+        <div className="absolute top-3 right-3 w-16 h-16 rounded-full border-2 border-current" />
+        <div className="absolute top-6 right-6 w-10 h-10 rounded-full border-2 border-current" />
       </div>
 
       {/* Card Content */}
       <div className="relative z-10">
-        <div className="flex items-start justify-between mb-4">
+        <div className="flex items-start justify-between mb-3">
           <div>
-            <h3 className="text-lg font-semibold mb-1">{card.name}</h3>
-            <p className="text-sm opacity-80">•••• {card.lastFiveDigits || '•••••'}</p>
+            <h3 className="text-base font-semibold mb-0.5">{card.name}</h3>
+            <p className="text-xs opacity-80">•••• {card.lastFiveDigits || '•••••'}</p>
           </div>
-          <CreditCardIcon className="w-8 h-8 opacity-80" />
+          <CreditCardIcon className="w-6 h-6 opacity-80" />
         </div>
 
         {/* Balance */}
-        <div className="mb-4">
+        <div className="mb-3">
           <p className="text-xs opacity-70 mb-0.5">Current Balance</p>
-          <p className="text-2xl font-bold">
+          <p className="text-xl font-bold">
             ${(card.currentBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </div>
@@ -77,17 +77,17 @@ interface DateBadgeProps {
 
 function DateBadge({ label, date, daysUntil, urgency }: DateBadgeProps) {
   return (
-    <div className="bg-white/15 backdrop-blur-sm rounded-xl p-3">
-      <div className="flex items-center gap-1.5 mb-1">
+    <div className="bg-white/15 backdrop-blur-sm rounded-lg p-2">
+      <div className="flex items-center gap-1 mb-0.5">
         {urgency === 'urgent' && (
-          <AlertCircle className="w-3.5 h-3.5 text-red-300" />
+          <AlertCircle className="w-3 h-3 text-red-300" />
         )}
-        <span className="text-xs opacity-70">{label}</span>
+        <span className="text-[10px] opacity-70">{label}</span>
       </div>
-      <p className="text-sm font-medium">{formatDate(date)}</p>
+      <p className="text-xs font-medium">{formatDate(date)}</p>
       <p
         className={cn(
-          'text-xs mt-0.5',
+          'text-[10px] mt-0.5',
           urgency === 'urgent' && 'text-red-300 font-medium',
           urgency === 'warning' && 'text-amber-300 font-medium',
           urgency === 'normal' && 'opacity-70'
