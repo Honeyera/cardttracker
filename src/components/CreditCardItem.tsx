@@ -57,9 +57,9 @@ export function CreditCardItem({ card, onEdit, onDelete }: CreditCardItemProps) 
 
         {/* Wait to Purchase Indicator */}
         {closingUrgency !== 'normal' && (
-          <div className="flex items-center gap-1.5 bg-amber-500/30 backdrop-blur-sm rounded-lg px-2 py-1.5 mb-3">
-            <AlertCircle className="w-3.5 h-3.5 text-amber-200" />
-            <span className="text-[11px] font-medium text-amber-100">
+          <div className="flex items-center justify-center gap-2 bg-amber-500 rounded-lg px-3 py-2 mb-3 shadow-lg animate-pulse">
+            <AlertCircle className="w-4 h-4 text-amber-950" />
+            <span className="text-xs font-bold text-amber-950">
               Closing soon — consider waiting to purchase
             </span>
           </div>
