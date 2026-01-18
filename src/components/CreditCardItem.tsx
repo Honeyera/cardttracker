@@ -33,12 +33,20 @@ export function CreditCardItem({ card, onEdit, onDelete }: CreditCardItemProps) 
 
       {/* Card Content */}
       <div className="relative z-10">
-        <div className="flex items-start justify-between mb-6">
+        <div className="flex items-start justify-between mb-4">
           <div>
             <h3 className="text-lg font-semibold mb-1">{card.name}</h3>
             <p className="text-sm opacity-80">•••• {card.lastFiveDigits || '•••••'}</p>
           </div>
           <CreditCardIcon className="w-8 h-8 opacity-80" />
+        </div>
+
+        {/* Balance */}
+        <div className="mb-4">
+          <p className="text-xs opacity-70 mb-0.5">Current Balance</p>
+          <p className="text-2xl font-bold">
+            ${(card.currentBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
