@@ -33,6 +33,7 @@ export type Database = {
           notes: string | null
           owner_name: string
           statement_date: number | null
+          team_id: string | null
           updated_at: string
           user_id: string
         }
@@ -54,6 +55,7 @@ export type Database = {
           notes?: string | null
           owner_name: string
           statement_date?: number | null
+          team_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -75,8 +77,76 @@ export type Database = {
           notes?: string | null
           owner_name?: string
           statement_date?: number | null
+          team_id?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_cards_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_members: {
+        Row: {
+          id: string
+          joined_at: string
+          role: string
+          team_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          role?: string
+          team_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          role?: string
+          team_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_members_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      teams: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          invite_code: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          invite_code?: string
+          name?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          invite_code?: string
+          name?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -85,7 +155,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_team_with_owner: { Args: { team_name: string }; Returns: string }
+      join_team_by_invite: { Args: { code: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never

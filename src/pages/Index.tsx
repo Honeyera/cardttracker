@@ -22,8 +22,9 @@ import { AddCardDialog } from '@/components/AddCardDialog';
 import { UploadScreenshotDialog } from '@/components/UploadScreenshotDialog';
 import { UpcomingDates } from '@/components/UpcomingDates';
 import { DashboardStats } from '@/components/DashboardStats';
+import { TeamManagement } from '@/components/TeamManagement';
 import { Button } from '@/components/ui/button';
-import { Plus, CreditCard, Wallet, Upload, LogOut, Loader2 } from 'lucide-react';
+import { Plus, CreditCard, Wallet, Upload, LogOut, Loader2, Users } from 'lucide-react';
 import { CreditCard as CreditCardType } from '@/types/creditCard';
 
 const Index = () => {
@@ -33,6 +34,7 @@ const Index = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<CreditCardType | null>(null);
+  const [showTeamPanel, setShowTeamPanel] = useState(false);
 
   const pointerSensor = useSensor(PointerSensor, {
     activationConstraint: {
@@ -117,6 +119,10 @@ const Index = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button onClick={() => setShowTeamPanel(!showTeamPanel)} size="sm" variant="outline">
+              <Users className="w-4 h-4 mr-1" />
+              Team
+            </Button>
             <Button onClick={() => setUploadDialogOpen(true)} size="sm" variant="outline">
               <Upload className="w-4 h-4 mr-1" />
               Upload Screenshot
@@ -134,6 +140,9 @@ const Index = () => {
 
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+        {/* Team Management Panel */}
+        {showTeamPanel && <TeamManagement />}
+
         {/* Dashboard Stats */}
         <DashboardStats cards={cards} />
 
