@@ -70,12 +70,12 @@ export function UpcomingDates({ cards }: UpcomingDatesProps) {
 
   return (
     <div className="bg-card rounded-2xl p-6 shadow-sm border border-border">
-      <div className="flex items-center gap-2 mb-6">
+      <div className="flex items-center gap-2 mb-4">
         <Calendar className="w-5 h-5 text-primary" />
         <h2 className="text-lg font-semibold text-card-foreground">Upcoming Dates</h2>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-2">
         {events.map((event, index) => {
           const urgency = getUrgencyLevel(event.daysUntil);
           const closingUrgency = getUrgencyLevel(event.daysUntilClosing);
@@ -85,112 +85,77 @@ export function UpcomingDates({ cards }: UpcomingDatesProps) {
             <div
               key={`${event.cardName}-${event.type}-${index}`}
               className={cn(
-                'rounded-xl p-4 border transition-all',
+                'rounded-lg p-3 border transition-all',
                 urgency === 'urgent' && 'bg-destructive/10 border-destructive/30',
                 urgency === 'warning' && 'bg-warning/10 border-warning/30',
-                urgency === 'normal' && 'bg-muted/50 border-border'
+                urgency === 'normal' && 'bg-muted/30 border-border'
               )}
             >
-              {/* Header: Card Info */}
-              <div className="flex items-start justify-between mb-3">
+              {/* Single Row Layout */}
+              <div className="flex items-center gap-3">
+                {/* Urgency Badge */}
+                <div className={cn(
+                  'flex-shrink-0 px-2 py-1 rounded text-xs font-bold uppercase',
+                  urgency === 'urgent' && 'bg-destructive text-destructive-foreground',
+                  urgency === 'warning' && 'bg-warning text-warning-foreground',
+                  urgency === 'normal' && 'bg-primary text-primary-foreground'
+                )}>
+                  {event.daysUntil === 0 ? 'Today' : `${event.daysUntil}d`}
+                </div>
+
+                {/* Card Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base font-semibold text-card-foreground">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-card-foreground truncate">
                       {event.cardName}
-                    </h3>
-                    <span className="text-sm text-muted-foreground font-mono bg-muted px-2 py-0.5 rounded">
+                    </span>
+                    <span className="text-xs text-muted-foreground font-mono">
                       •••{event.lastFiveDigits}
                     </span>
-                  </div>
-                  {(event.companyName || event.ownerName) && (
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {event.companyName}{event.companyName && event.ownerName && ' • '}{event.ownerName}
-                    </p>
-                  )}
-                </div>
-                {event.currentBalance !== undefined && event.currentBalance > 0 && (
-                  <div className="text-right ml-3">
-                    <p className="text-xs text-muted-foreground">Balance</p>
-                    <p className="text-base font-bold text-card-foreground">
-                      ${event.currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Primary Event Badge */}
-              <div className={cn(
-                'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg mb-3',
-                urgency === 'urgent' && 'bg-destructive text-destructive-foreground',
-                urgency === 'warning' && 'bg-warning text-warning-foreground',
-                urgency === 'normal' && 'bg-primary text-primary-foreground'
-              )}>
-                <span className="text-sm font-medium capitalize">{event.type} Date</span>
-                <span className="text-sm font-bold">
-                  {event.daysUntil === 0 ? 'Today!' : `in ${event.daysUntil} days`}
-                </span>
-              </div>
-
-              {/* Date Details Grid */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className={cn(
-                  'rounded-lg p-3 border',
-                  closingUrgency === 'urgent' && 'bg-destructive/10 border-destructive/30',
-                  closingUrgency === 'warning' && 'bg-warning/10 border-warning/30',
-                  closingUrgency === 'normal' && 'bg-background border-border'
-                )}>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <div className={cn(
-                      'w-2 h-2 rounded-full',
-                      closingUrgency === 'urgent' && 'bg-destructive',
-                      closingUrgency === 'warning' && 'bg-warning',
-                      closingUrgency === 'normal' && 'bg-success'
-                    )} />
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      Closing
+                    <span className={cn(
+                      'text-xs font-medium px-1.5 py-0.5 rounded capitalize',
+                      event.type === 'closing' && 'bg-blue-500/20 text-blue-700 dark:text-blue-300',
+                      event.type === 'due' && 'bg-orange-500/20 text-orange-700 dark:text-orange-300'
+                    )}>
+                      {event.type}
                     </span>
                   </div>
-                  <p className="text-sm font-semibold text-card-foreground">
-                    {formatDate(event.closingDate)}
-                  </p>
-                  <p className={cn(
-                    'text-xs font-medium',
-                    closingUrgency === 'urgent' && 'text-destructive',
-                    closingUrgency === 'warning' && 'text-warning',
-                    closingUrgency === 'normal' && 'text-muted-foreground'
-                  )}>
-                    {event.daysUntilClosing === 0 ? 'Today!' : `${event.daysUntilClosing} days`}
-                  </p>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                    {(event.companyName || event.ownerName) && (
+                      <span className="truncate">
+                        {event.companyName}{event.companyName && event.ownerName && ' • '}{event.ownerName}
+                      </span>
+                    )}
+                    {event.currentBalance !== undefined && event.currentBalance > 0 && (
+                      <span className="font-medium text-card-foreground">
+                        ${event.currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                <div className={cn(
-                  'rounded-lg p-3 border',
-                  dueUrgency === 'urgent' && 'bg-destructive/10 border-destructive/30',
-                  dueUrgency === 'warning' && 'bg-warning/10 border-warning/30',
-                  dueUrgency === 'normal' && 'bg-background border-border'
-                )}>
-                  <div className="flex items-center gap-1.5 mb-1">
+                {/* Date Info */}
+                <div className="flex-shrink-0 flex items-center gap-2 text-xs">
+                  <div className="text-center px-2 py-1 rounded bg-background border border-border">
                     <div className={cn(
-                      'w-2 h-2 rounded-full',
-                      dueUrgency === 'urgent' && 'bg-destructive',
-                      dueUrgency === 'warning' && 'bg-warning',
-                      dueUrgency === 'normal' && 'bg-success'
-                    )} />
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      Due
-                    </span>
+                      'font-medium',
+                      closingUrgency === 'urgent' && 'text-destructive',
+                      closingUrgency === 'warning' && 'text-warning',
+                      closingUrgency === 'normal' && 'text-muted-foreground'
+                    )}>
+                      <span className="text-muted-foreground/70">C:</span> {formatDate(event.closingDate).slice(0, -6)}
+                    </div>
                   </div>
-                  <p className="text-sm font-semibold text-card-foreground">
-                    {formatDate(event.dueDate)}
-                  </p>
-                  <p className={cn(
-                    'text-xs font-medium',
-                    dueUrgency === 'urgent' && 'text-destructive',
-                    dueUrgency === 'warning' && 'text-warning',
-                    dueUrgency === 'normal' && 'text-muted-foreground'
-                  )}>
-                    {event.daysUntilDue === 0 ? 'Today!' : `${event.daysUntilDue} days`}
-                  </p>
+                  <div className="text-center px-2 py-1 rounded bg-background border border-border">
+                    <div className={cn(
+                      'font-medium',
+                      dueUrgency === 'urgent' && 'text-destructive',
+                      dueUrgency === 'warning' && 'text-warning',
+                      dueUrgency === 'normal' && 'text-muted-foreground'
+                    )}>
+                      <span className="text-muted-foreground/70">D:</span> {formatDate(event.dueDate).slice(0, -6)}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
