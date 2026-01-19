@@ -1,6 +1,6 @@
 import { CreditCard } from '@/types/creditCard';
 import { getDaysUntil, getNextOccurrence, formatDate, getUrgencyLevel } from '@/utils/dateUtils';
-import { Calendar, Clock } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface UpcomingDatesProps {
@@ -91,76 +91,86 @@ export function UpcomingDates({ cards }: UpcomingDatesProps) {
                 urgency === 'normal' && 'bg-muted/30 border-border'
               )}
             >
-              {/* Flex Layout for Even Spacing */}
-              <div className="flex items-center gap-3">
+              {/* Responsive layout: dates wrap onto their own line on small screens */}
+              <div className="flex flex-wrap items-center gap-3">
                 {/* Days Badge */}
                 <div className="flex-shrink-0 w-12">
-                  <div className={cn(
-                    'px-2 py-1 rounded text-xs font-bold uppercase text-center',
-                    urgency === 'urgent' && 'bg-destructive text-destructive-foreground',
-                    urgency === 'warning' && 'bg-warning text-warning-foreground',
-                    urgency === 'normal' && 'bg-primary text-primary-foreground'
-                  )}>
+                  <div
+                    className={cn(
+                      'px-2 py-1 rounded text-xs font-bold uppercase text-center',
+                      urgency === 'urgent' && 'bg-destructive text-destructive-foreground',
+                      urgency === 'warning' && 'bg-warning text-warning-foreground',
+                      urgency === 'normal' && 'bg-primary text-primary-foreground'
+                    )}
+                  >
                     {event.daysUntil === 0 ? 'Now' : `${event.daysUntil}d`}
                   </div>
                 </div>
 
                 {/* Card Name */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-card-foreground truncate">
-                    {event.cardName}
-                  </p>
-                  <p className="text-xs text-muted-foreground font-mono">
-                    •••{event.lastFiveDigits}
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-card-foreground truncate">{event.cardName}</p>
+                  <p className="text-xs text-muted-foreground font-mono">•••{event.lastFiveDigits}</p>
                 </div>
 
                 {/* Type Badge */}
                 <div className="flex-shrink-0">
-                  <span className={cn(
-                    'text-xs font-medium px-2 py-1 rounded capitalize inline-block',
-                    event.type === 'closing' && 'bg-blue-500/20 text-blue-700 dark:text-blue-300',
-                    event.type === 'due' && 'bg-orange-500/20 text-orange-700 dark:text-orange-300'
-                  )}>
+                  <span
+                    className={cn(
+                      'text-xs font-medium px-2 py-1 rounded capitalize inline-block',
+                      event.type === 'closing' && 'bg-blue-500/20 text-blue-700 dark:text-blue-300',
+                      event.type === 'due' && 'bg-orange-500/20 text-orange-700 dark:text-orange-300'
+                    )}
+                  >
                     {event.type}
                   </span>
                 </div>
 
-                {/* Balance */}
-                <div className="flex-shrink-0 w-24 text-right">
-                  {event.currentBalance !== undefined && event.currentBalance > 0 ? (
-                    <p className="text-sm font-semibold text-card-foreground">
-                      ${event.currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {/* Right side: balance + dates (wraps to next line on small) */}
+                <div className="w-full sm:w-auto sm:ml-auto flex items-center justify-between sm:justify-end gap-3">
+                  {/* Balance (hide on very small screens to keep dates visible) */}
+                  <div className="hidden md:block w-24 text-right">
+                    {event.currentBalance !== undefined && event.currentBalance > 0 ? (
+                      <p className="text-sm font-semibold text-card-foreground">
+                        ${event.currentBalance.toLocaleString('en-US', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground/50">—</p>
+                    )}
+                  </div>
+
+                  {/* Closing Date */}
+                  <div className="flex-shrink-0 w-20 text-center">
+                    <p className="text-[10px] text-muted-foreground uppercase">Close</p>
+                    <p
+                      className={cn(
+                        'text-sm font-medium',
+                        closingUrgency === 'urgent' && 'text-destructive',
+                        closingUrgency === 'warning' && 'text-warning',
+                        closingUrgency === 'normal' && 'text-card-foreground'
+                      )}
+                    >
+                      {formatDate(event.closingDate).slice(0, -6)}
                     </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground/50">—</p>
-                  )}
-                </div>
+                  </div>
 
-                {/* Closing Date */}
-                <div className="flex-shrink-0 w-20 text-center">
-                  <p className="text-[10px] text-muted-foreground uppercase">Close</p>
-                  <p className={cn(
-                    'text-sm font-medium',
-                    closingUrgency === 'urgent' && 'text-destructive',
-                    closingUrgency === 'warning' && 'text-warning',
-                    closingUrgency === 'normal' && 'text-card-foreground'
-                  )}>
-                    {formatDate(event.closingDate).slice(0, -6)}
-                  </p>
-                </div>
-
-                {/* Due Date */}
-                <div className="flex-shrink-0 w-20 text-center">
-                  <p className="text-[10px] text-muted-foreground uppercase">Due</p>
-                  <p className={cn(
-                    'text-sm font-medium',
-                    dueUrgency === 'urgent' && 'text-destructive',
-                    dueUrgency === 'warning' && 'text-warning',
-                    dueUrgency === 'normal' && 'text-card-foreground'
-                  )}>
-                    {formatDate(event.dueDate).slice(0, -6)}
-                  </p>
+                  {/* Due Date */}
+                  <div className="flex-shrink-0 w-20 text-center">
+                    <p className="text-[10px] text-muted-foreground uppercase">Due</p>
+                    <p
+                      className={cn(
+                        'text-sm font-medium',
+                        dueUrgency === 'urgent' && 'text-destructive',
+                        dueUrgency === 'warning' && 'text-warning',
+                        dueUrgency === 'normal' && 'text-card-foreground'
+                      )}
+                    >
+                      {formatDate(event.dueDate).slice(0, -6)}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
