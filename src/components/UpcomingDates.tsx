@@ -9,7 +9,10 @@ interface UpcomingDatesProps {
 
 interface DateEvent {
   cardName: string;
+  companyName?: string;
+  ownerName?: string;
   lastFiveDigits: string;
+  currentBalance?: number;
   type: 'closing' | 'due';
   date: Date;
   daysUntil: number;
@@ -20,14 +23,20 @@ export function UpcomingDates({ cards }: UpcomingDatesProps) {
     .flatMap((card) => [
       {
         cardName: card.name,
+        companyName: card.companyName,
+        ownerName: card.ownerName,
         lastFiveDigits: card.lastFiveDigits,
+        currentBalance: card.currentBalance,
         type: 'closing' as const,
         date: getNextOccurrence(card.closingDay),
         daysUntil: getDaysUntil(card.closingDay),
       },
       {
         cardName: card.name,
+        companyName: card.companyName,
+        ownerName: card.ownerName,
         lastFiveDigits: card.lastFiveDigits,
+        currentBalance: card.currentBalance,
         type: 'due' as const,
         date: getNextOccurrence(card.dueDay),
         daysUntil: getDaysUntil(card.dueDay),
@@ -58,22 +67,37 @@ export function UpcomingDates({ cards }: UpcomingDatesProps) {
               <div className="flex items-center gap-3">
                 <div
                   className={cn(
-                    'w-2 h-2 rounded-full',
+                    'w-2 h-2 rounded-full flex-shrink-0',
                     urgency === 'urgent' && 'bg-destructive',
                     urgency === 'warning' && 'bg-warning',
                     urgency === 'normal' && 'bg-success'
                   )}
                 />
-                <div>
-                  <p className="text-sm font-medium text-card-foreground">
-                    {event.cardName}
-                    <span className="ml-2 text-xs text-muted-foreground font-mono">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-card-foreground truncate">
+                      {event.cardName}
+                    </p>
+                    <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
                       •••{event.lastFiveDigits}
                     </span>
-                  </p>
-                  <p className="text-xs text-muted-foreground capitalize">
-                    {event.type} Date
-                  </p>
+                  </div>
+                  {event.companyName && (
+                    <p className="text-xs text-muted-foreground truncate">{event.companyName}</p>
+                  )}
+                  {event.ownerName && (
+                    <p className="text-xs text-muted-foreground/70 truncate">{event.ownerName}</p>
+                  )}
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-xs text-muted-foreground capitalize">
+                      {event.type} Date
+                    </p>
+                    {event.currentBalance !== undefined && event.currentBalance > 0 && (
+                      <span className="text-xs font-medium text-primary">
+                        ${event.currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="text-right">
