@@ -16,32 +16,51 @@ interface DateEvent {
   type: 'closing' | 'due';
   date: Date;
   daysUntil: number;
+  closingDate: Date;
+  dueDate: Date;
+  daysUntilClosing: number;
+  daysUntilDue: number;
 }
 
 export function UpcomingDates({ cards }: UpcomingDatesProps) {
   const events: DateEvent[] = cards
-    .flatMap((card) => [
-      {
-        cardName: card.name,
-        companyName: card.companyName,
-        ownerName: card.ownerName,
-        lastFiveDigits: card.lastFiveDigits,
-        currentBalance: card.currentBalance,
-        type: 'closing' as const,
-        date: getNextOccurrence(card.closingDay),
-        daysUntil: getDaysUntil(card.closingDay),
-      },
-      {
-        cardName: card.name,
-        companyName: card.companyName,
-        ownerName: card.ownerName,
-        lastFiveDigits: card.lastFiveDigits,
-        currentBalance: card.currentBalance,
-        type: 'due' as const,
-        date: getNextOccurrence(card.dueDay),
-        daysUntil: getDaysUntil(card.dueDay),
-      },
-    ])
+    .flatMap((card) => {
+      const closingDate = getNextOccurrence(card.closingDay);
+      const dueDate = getNextOccurrence(card.dueDay);
+      const daysUntilClosing = getDaysUntil(card.closingDay);
+      const daysUntilDue = getDaysUntil(card.dueDay);
+      
+      return [
+        {
+          cardName: card.name,
+          companyName: card.companyName,
+          ownerName: card.ownerName,
+          lastFiveDigits: card.lastFiveDigits,
+          currentBalance: card.currentBalance,
+          type: 'closing' as const,
+          date: closingDate,
+          daysUntil: daysUntilClosing,
+          closingDate,
+          dueDate,
+          daysUntilClosing,
+          daysUntilDue,
+        },
+        {
+          cardName: card.name,
+          companyName: card.companyName,
+          ownerName: card.ownerName,
+          lastFiveDigits: card.lastFiveDigits,
+          currentBalance: card.currentBalance,
+          type: 'due' as const,
+          date: dueDate,
+          daysUntil: daysUntilDue,
+          closingDate,
+          dueDate,
+          daysUntilClosing,
+          daysUntilDue,
+        },
+      ];
+    })
     .sort((a, b) => a.daysUntil - b.daysUntil)
     .slice(0, 5);
 
@@ -100,7 +119,7 @@ export function UpcomingDates({ cards }: UpcomingDatesProps) {
                   </div>
                 </div>
               </div>
-              <div className="text-right">
+              <div className="text-right flex-shrink-0">
                 <p className="text-sm font-medium text-card-foreground">
                   {formatDate(event.date)}
                 </p>
@@ -114,6 +133,14 @@ export function UpcomingDates({ cards }: UpcomingDatesProps) {
                 >
                   {event.daysUntil === 0 ? 'Today!' : `in ${event.daysUntil} days`}
                 </p>
+                <div className="mt-1 pt-1 border-t border-border/50">
+                  <p className="text-[10px] text-muted-foreground">
+                    Close: {formatDate(event.closingDate)} ({event.daysUntilClosing}d)
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Due: {formatDate(event.dueDate)} ({event.daysUntilDue}d)
+                  </p>
+                </div>
               </div>
             </div>
           );
