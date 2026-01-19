@@ -21,6 +21,7 @@ import { SortableCardItem } from '@/components/SortableCardItem';
 import { AddCardDialog } from '@/components/AddCardDialog';
 import { UploadScreenshotDialog } from '@/components/UploadScreenshotDialog';
 import { UpcomingDates } from '@/components/UpcomingDates';
+import { CreditCardTable } from '@/components/CreditCardTable';
 import { DashboardStats } from '@/components/DashboardStats';
 import { TeamManagement } from '@/components/TeamManagement';
 import { Button } from '@/components/ui/button';
@@ -198,6 +199,9 @@ const Index = () => {
             </DndContext>
           )}
         </div>
+
+        {/* Card Table Section */}
+        <CreditCardTable cards={cards} onEdit={handleEdit} />
 
         {/* Upcoming Dates Section */}
         <UpcomingDates cards={cards} />
