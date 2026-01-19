@@ -70,75 +70,126 @@ export function UpcomingDates({ cards }: UpcomingDatesProps) {
 
   return (
     <div className="bg-card rounded-2xl p-6 shadow-sm border border-border">
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-6">
         <Calendar className="w-5 h-5 text-primary" />
         <h2 className="text-lg font-semibold text-card-foreground">Upcoming Dates</h2>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         {events.map((event, index) => {
           const urgency = getUrgencyLevel(event.daysUntil);
+          const closingUrgency = getUrgencyLevel(event.daysUntilClosing);
+          const dueUrgency = getUrgencyLevel(event.daysUntilDue);
+          
           return (
             <div
               key={`${event.cardName}-${event.type}-${index}`}
-              className="flex items-center justify-between py-2 border-b border-border last:border-0"
+              className={cn(
+                'rounded-xl p-4 border transition-all',
+                urgency === 'urgent' && 'bg-destructive/10 border-destructive/30',
+                urgency === 'warning' && 'bg-warning/10 border-warning/30',
+                urgency === 'normal' && 'bg-muted/50 border-border'
+              )}
             >
-              <div className="flex items-center gap-3">
-                <div
-                  className={cn(
-                    'w-2 h-2 rounded-full flex-shrink-0',
-                    urgency === 'urgent' && 'bg-destructive',
-                    urgency === 'warning' && 'bg-warning',
-                    urgency === 'normal' && 'bg-success'
-                  )}
-                />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-card-foreground truncate">
+              {/* Header: Card Info */}
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-semibold text-card-foreground">
                       {event.cardName}
-                    </p>
-                    <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
+                    </h3>
+                    <span className="text-sm text-muted-foreground font-mono bg-muted px-2 py-0.5 rounded">
                       •••{event.lastFiveDigits}
                     </span>
                   </div>
-                  {event.companyName && (
-                    <p className="text-xs text-muted-foreground truncate">{event.companyName}</p>
-                  )}
-                  {event.ownerName && (
-                    <p className="text-xs text-muted-foreground/70 truncate">{event.ownerName}</p>
-                  )}
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <p className="text-xs text-muted-foreground capitalize">
-                      {event.type} Date
+                  {(event.companyName || event.ownerName) && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {event.companyName}{event.companyName && event.ownerName && ' • '}{event.ownerName}
                     </p>
-                    {event.currentBalance !== undefined && event.currentBalance > 0 && (
-                      <span className="text-xs font-medium text-primary">
-                        ${event.currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <p className="text-sm font-medium text-card-foreground">
-                  {formatDate(event.date)}
-                </p>
-                <p
-                  className={cn(
-                    'text-xs',
-                    urgency === 'urgent' && 'text-destructive font-medium',
-                    urgency === 'warning' && 'text-warning font-medium',
-                    urgency === 'normal' && 'text-muted-foreground'
                   )}
-                >
+                </div>
+                {event.currentBalance !== undefined && event.currentBalance > 0 && (
+                  <div className="text-right ml-3">
+                    <p className="text-xs text-muted-foreground">Balance</p>
+                    <p className="text-base font-bold text-card-foreground">
+                      ${event.currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Primary Event Badge */}
+              <div className={cn(
+                'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg mb-3',
+                urgency === 'urgent' && 'bg-destructive text-destructive-foreground',
+                urgency === 'warning' && 'bg-warning text-warning-foreground',
+                urgency === 'normal' && 'bg-primary text-primary-foreground'
+              )}>
+                <span className="text-sm font-medium capitalize">{event.type} Date</span>
+                <span className="text-sm font-bold">
                   {event.daysUntil === 0 ? 'Today!' : `in ${event.daysUntil} days`}
-                </p>
-                <div className="mt-1 pt-1 border-t border-border/50">
-                  <p className="text-[10px] text-muted-foreground">
-                    Close: {formatDate(event.closingDate)} ({event.daysUntilClosing}d)
+                </span>
+              </div>
+
+              {/* Date Details Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className={cn(
+                  'rounded-lg p-3 border',
+                  closingUrgency === 'urgent' && 'bg-destructive/10 border-destructive/30',
+                  closingUrgency === 'warning' && 'bg-warning/10 border-warning/30',
+                  closingUrgency === 'normal' && 'bg-background border-border'
+                )}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <div className={cn(
+                      'w-2 h-2 rounded-full',
+                      closingUrgency === 'urgent' && 'bg-destructive',
+                      closingUrgency === 'warning' && 'bg-warning',
+                      closingUrgency === 'normal' && 'bg-success'
+                    )} />
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Closing
+                    </span>
+                  </div>
+                  <p className="text-sm font-semibold text-card-foreground">
+                    {formatDate(event.closingDate)}
                   </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    Due: {formatDate(event.dueDate)} ({event.daysUntilDue}d)
+                  <p className={cn(
+                    'text-xs font-medium',
+                    closingUrgency === 'urgent' && 'text-destructive',
+                    closingUrgency === 'warning' && 'text-warning',
+                    closingUrgency === 'normal' && 'text-muted-foreground'
+                  )}>
+                    {event.daysUntilClosing === 0 ? 'Today!' : `${event.daysUntilClosing} days`}
+                  </p>
+                </div>
+
+                <div className={cn(
+                  'rounded-lg p-3 border',
+                  dueUrgency === 'urgent' && 'bg-destructive/10 border-destructive/30',
+                  dueUrgency === 'warning' && 'bg-warning/10 border-warning/30',
+                  dueUrgency === 'normal' && 'bg-background border-border'
+                )}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <div className={cn(
+                      'w-2 h-2 rounded-full',
+                      dueUrgency === 'urgent' && 'bg-destructive',
+                      dueUrgency === 'warning' && 'bg-warning',
+                      dueUrgency === 'normal' && 'bg-success'
+                    )} />
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Due
+                    </span>
+                  </div>
+                  <p className="text-sm font-semibold text-card-foreground">
+                    {formatDate(event.dueDate)}
+                  </p>
+                  <p className={cn(
+                    'text-xs font-medium',
+                    dueUrgency === 'urgent' && 'text-destructive',
+                    dueUrgency === 'warning' && 'text-warning',
+                    dueUrgency === 'normal' && 'text-muted-foreground'
+                  )}>
+                    {event.daysUntilDue === 0 ? 'Today!' : `${event.daysUntilDue} days`}
                   </p>
                 </div>
               </div>
