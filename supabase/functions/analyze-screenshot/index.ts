@@ -44,6 +44,7 @@ Extract credit card information from the image. For each card found, extract:
 - dueDay: The payment due day of the month (1-31)
 - currentBalance: The current balance amount (number only, no currency symbol)
 - creditLimit: The credit limit if visible (number only, no currency symbol)
+- paymentStatus: If you see text like "Payment not required at this time", "No payment due", "Paid in full", or similar status messages, include the exact text here. Otherwise, leave it null.
 
 CRITICAL: lastFiveDigits must ALWAYS be exactly 5 characters, as a STRING with quotes. Never return it as a number.
 
@@ -56,7 +57,8 @@ Return ONLY valid JSON in this exact format, no markdown:
       "closingDay": 15,
       "dueDay": 22,
       "currentBalance": 1234.56,
-      "creditLimit": 10000
+      "creditLimit": 10000,
+      "paymentStatus": null
     }
   ]
 }

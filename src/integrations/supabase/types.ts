@@ -32,6 +32,7 @@ export type Database = {
           next_fee_date: string | null
           notes: string | null
           owner_name: string
+          payment_status: string | null
           statement_date: number | null
           team_id: string | null
           updated_at: string
@@ -54,6 +55,7 @@ export type Database = {
           next_fee_date?: string | null
           notes?: string | null
           owner_name: string
+          payment_status?: string | null
           statement_date?: number | null
           team_id?: string | null
           updated_at?: string
@@ -76,6 +78,7 @@ export type Database = {
           next_fee_date?: string | null
           notes?: string | null
           owner_name?: string
+          payment_status?: string | null
           statement_date?: number | null
           team_id?: string | null
           updated_at?: string
