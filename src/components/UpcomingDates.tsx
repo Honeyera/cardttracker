@@ -107,10 +107,13 @@ export function UpcomingDates({ cards }: UpcomingDatesProps) {
                   </div>
                 </div>
 
-                {/* Card Name */}
+                {/* Card Name & Owner */}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-card-foreground truncate">{event.cardName}</p>
-                  <p className="text-xs text-muted-foreground font-mono">•••{event.lastFiveDigits}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">{event.ownerName}</span>
+                    <span className="text-xs text-muted-foreground font-mono">•••{event.lastFiveDigits}</span>
+                  </div>
                 </div>
 
                 {/* Type Badge */}
