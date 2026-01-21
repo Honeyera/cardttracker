@@ -56,6 +56,7 @@ export function UploadScreenshotDialog({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [newCards, setNewCards] = useState<ParsedCard[]>([]);
   const [matchedCards, setMatchedCards] = useState<MatchedCard[]>([]);
+  const [unchangedCount, setUnchangedCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -90,6 +91,7 @@ export function UploadScreenshotDialog({
     setIsAnalyzing(true);
     setNewCards([]);
     setMatchedCards([]);
+    setUnchangedCount(0);
 
     try {
       const { data, error } = await supabase.functions.invoke('analyze-screenshot', {
@@ -122,6 +124,7 @@ export function UploadScreenshotDialog({
 
         const newCardsList: ParsedCard[] = [];
         const matchedCardsList: MatchedCard[] = [];
+        let unchangedCardCount = 0;
 
         parsedCards.forEach((parsedCard) => {
           const existing = findExistingCard(parsedCard);
@@ -134,6 +137,8 @@ export function UploadScreenshotDialog({
                 existingCard: existing,
                 newBalance: parsedCard.currentBalance,
               });
+            } else {
+              unchangedCardCount++;
             }
           } else {
             newCardsList.push(parsedCard);
@@ -142,6 +147,7 @@ export function UploadScreenshotDialog({
 
         setNewCards(newCardsList);
         setMatchedCards(matchedCardsList);
+        setUnchangedCount(unchangedCardCount);
 
         if (newCardsList.length === 0 && matchedCardsList.length === 0) {
           toast({
@@ -204,6 +210,7 @@ export function UploadScreenshotDialog({
     setPreviewUrl(null);
     setNewCards([]);
     setMatchedCards([]);
+    setUnchangedCount(0);
     setIsAnalyzing(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -327,6 +334,23 @@ export function UploadScreenshotDialog({
                 ))}
               </div>
             </div>
+          )}
+
+          {/* No Changes Message */}
+          {!isAnalyzing && previewUrl && unchangedCount > 0 && newCards.length === 0 && matchedCards.length === 0 && (
+            <div className="p-4 bg-muted/50 border border-border rounded-lg text-center">
+              <p className="text-sm font-medium text-foreground">No updates needed</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {unchangedCount} card{unchangedCount > 1 ? 's' : ''} found with unchanged balance{unchangedCount > 1 ? 's' : ''}.
+              </p>
+            </div>
+          )}
+
+          {/* Unchanged count info when there are other changes */}
+          {unchangedCount > 0 && (newCards.length > 0 || matchedCards.length > 0) && (
+            <p className="text-xs text-muted-foreground text-center">
+              {unchangedCount} card{unchangedCount > 1 ? 's' : ''} skipped (balance unchanged)
+            </p>
           )}
 
           {/* Actions */}
