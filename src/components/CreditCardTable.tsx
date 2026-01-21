@@ -97,7 +97,7 @@ export function CreditCardTable({ cards, onEdit }: CreditCardTableProps) {
                       {card.paymentStatus && (
                         <div className="flex items-center justify-end gap-1 text-emerald-600 mt-0.5">
                           <CheckCircle className="w-3 h-3" />
-                          <span className="text-xs">No payment due</span>
+                          <span className="text-xs">Payment not required</span>
                         </div>
                       )}
                     </div>
