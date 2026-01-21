@@ -126,10 +126,15 @@ export function UploadScreenshotDialog({
         parsedCards.forEach((parsedCard) => {
           const existing = findExistingCard(parsedCard);
           if (existing) {
-            matchedCardsList.push({
-              existingCard: existing,
-              newBalance: parsedCard.currentBalance,
-            });
+            // Only add to matched list if balance is actually different
+            const existingBalance = existing.currentBalance || 0;
+            const newBalance = parsedCard.currentBalance || 0;
+            if (Math.abs(existingBalance - newBalance) >= 0.01) {
+              matchedCardsList.push({
+                existingCard: existing,
+                newBalance: parsedCard.currentBalance,
+              });
+            }
           } else {
             newCardsList.push(parsedCard);
           }
