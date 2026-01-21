@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { CreditCard, CardColor } from '@/types/creditCard';
-import { Check, ImageIcon, Loader2, Plus, RefreshCw, Upload } from 'lucide-react';
+import { ImageIcon, Loader2, Plus, RefreshCw, Upload, X } from 'lucide-react';
 
 interface UploadScreenshotDialogProps {
   open: boolean;
@@ -293,13 +293,16 @@ export function UploadScreenshotDialog({
                 <Plus className="w-4 h-4 text-success" />
                 Adding {newCards.length} new card{newCards.length > 1 ? 's' : ''}:
               </p>
+              <p className="text-xs text-muted-foreground">
+                Click the X to remove any incorrectly detected cards.
+              </p>
               <div className="space-y-2 max-h-32 overflow-y-auto">
                 {newCards.map((card, index) => (
                   <div
                     key={index}
                     className="flex items-center justify-between p-3 bg-success/10 border border-success/20 rounded-lg"
                   >
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm">{card.name}</p>
                       <p className="text-xs text-muted-foreground">
                         •••• {card.lastFiveDigits} | Due: {card.dueDay}th | Balance: ${
@@ -307,7 +310,14 @@ export function UploadScreenshotDialog({
                         }
                       </p>
                     </div>
-                    <Check className="w-4 h-4 text-success" />
+                    <button
+                      type="button"
+                      onClick={() => setNewCards((prev) => prev.filter((_, i) => i !== index))}
+                      className="ml-2 p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
+                      title="Remove this card"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
                 ))}
               </div>
