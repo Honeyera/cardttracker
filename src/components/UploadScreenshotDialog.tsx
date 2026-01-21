@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { CreditCard, CardColor } from '@/types/creditCard';
-import { ImageIcon, Loader2, Plus, RefreshCw, Upload, X } from 'lucide-react';
+import { CheckCircle, ImageIcon, Loader2, Plus, RefreshCw, Upload, X } from 'lucide-react';
 
 interface UploadScreenshotDialogProps {
   open: boolean;
@@ -267,6 +267,18 @@ export function UploadScreenshotDialog({
                   </div>
                 </div>
               )}
+              {/* No Changes Overlay - shown on image when nothing to update */}
+              {!isAnalyzing && unchangedCount > 0 && newCards.length === 0 && matchedCards.length === 0 && (
+                <div className="absolute inset-0 bg-background/90 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                  <div className="text-center px-4">
+                    <CheckCircle className="w-12 h-12 mx-auto mb-3 text-primary" />
+                    <p className="text-lg font-semibold text-foreground">All up to date!</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {unchangedCount} card{unchangedCount > 1 ? 's' : ''} found — balances unchanged.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -336,15 +348,6 @@ export function UploadScreenshotDialog({
             </div>
           )}
 
-          {/* No Changes Message */}
-          {!isAnalyzing && previewUrl && unchangedCount > 0 && newCards.length === 0 && matchedCards.length === 0 && (
-            <div className="p-4 bg-muted/50 border border-border rounded-lg text-center">
-              <p className="text-sm font-medium text-foreground">No updates needed</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {unchangedCount} card{unchangedCount > 1 ? 's' : ''} found with unchanged balance{unchangedCount > 1 ? 's' : ''}.
-              </p>
-            </div>
-          )}
 
           {/* Unchanged count info when there are other changes */}
           {unchangedCount > 0 && (newCards.length > 0 || matchedCards.length > 0) && (
