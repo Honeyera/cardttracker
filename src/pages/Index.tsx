@@ -25,7 +25,8 @@ import { CreditCardTable } from '@/components/CreditCardTable';
 import { DashboardStats } from '@/components/DashboardStats';
 import { TeamManagement } from '@/components/TeamManagement';
 import { Button } from '@/components/ui/button';
-import { Plus, CreditCard, Wallet, Upload, LogOut, Loader2, Users } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, CreditCard, Wallet, Upload, LogOut, Loader2, Users, LayoutGrid, Table } from 'lucide-react';
 import { CreditCard as CreditCardType } from '@/types/creditCard';
 
 const Index = () => {
@@ -147,61 +148,78 @@ const Index = () => {
         {/* Dashboard Stats */}
         <DashboardStats cards={cards} />
 
-        {/* Cards Section */}
-        <div>
-          <div className="flex items-center gap-2 mb-4">
-            <CreditCard className="w-5 h-5 text-primary" />
-            <h2 className="text-lg font-semibold text-foreground">Your Cards</h2>
-            {cards.length > 1 && (
-              <span className="text-xs text-muted-foreground ml-2">(drag to reorder)</span>
-            )}
+        {/* Cards Section with Tabs */}
+        <Tabs defaultValue="cards" className="w-full">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-primary" />
+              <h2 className="text-lg font-semibold text-foreground">Your Cards</h2>
+            </div>
+            <TabsList>
+              <TabsTrigger value="cards" className="gap-1.5">
+                <LayoutGrid className="w-4 h-4" />
+                Cards
+              </TabsTrigger>
+              <TabsTrigger value="table" className="gap-1.5">
+                <Table className="w-4 h-4" />
+                Table
+              </TabsTrigger>
+            </TabsList>
           </div>
 
-          {cardsLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            </div>
-          ) : cards.length === 0 ? (
-            <div className="bg-card rounded-2xl p-12 text-center border border-dashed border-border">
-              <CreditCard className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-2">
-                No cards yet
-              </h3>
-              <p className="text-muted-foreground mb-4">
-                Add your first credit card to start tracking dates
-              </p>
-              <Button onClick={() => setDialogOpen(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Your First Card
-              </Button>
-            </div>
-          ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={cardIds}
-                strategy={rectSortingStrategy}
-              >
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {cards.map((card) => (
-                    <SortableCardItem
-                      key={card.id}
-                      card={card}
-                      onEdit={handleEdit}
-                      onDelete={deleteCard}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-          )}
-        </div>
+          <TabsContent value="cards" className="mt-0">
+            {cardsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            ) : cards.length === 0 ? (
+              <div className="bg-card rounded-2xl p-12 text-center border border-dashed border-border">
+                <CreditCard className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-foreground mb-2">
+                  No cards yet
+                </h3>
+                <p className="text-muted-foreground mb-4">
+                  Add your first credit card to start tracking dates
+                </p>
+                <Button onClick={() => setDialogOpen(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Your First Card
+                </Button>
+              </div>
+            ) : (
+              <>
+                {cards.length > 1 && (
+                  <p className="text-xs text-muted-foreground mb-3">(drag to reorder)</p>
+                )}
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={cardIds}
+                    strategy={rectSortingStrategy}
+                  >
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {cards.map((card) => (
+                        <SortableCardItem
+                          key={card.id}
+                          card={card}
+                          onEdit={handleEdit}
+                          onDelete={deleteCard}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              </>
+            )}
+          </TabsContent>
 
-        {/* Card Table Section */}
-        <CreditCardTable cards={cards} onEdit={handleEdit} />
+          <TabsContent value="table" className="mt-0">
+            <CreditCardTable cards={cards} onEdit={handleEdit} />
+          </TabsContent>
+        </Tabs>
 
         {/* Upcoming Dates Section */}
         <UpcomingDates cards={cards} />
