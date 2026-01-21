@@ -47,12 +47,23 @@ export function CreditCardItem({ card, onEdit, onDelete }: CreditCardItemProps) 
           <CreditCardIcon className="w-6 h-6 opacity-80" />
         </div>
 
-        {/* Balance */}
+        {/* Balance or Payment Status */}
         <div className="mb-3">
-          <p className="text-xs opacity-70 mb-0.5">Current Balance</p>
-          <p className="text-xl font-bold">
-            ${(card.currentBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
+          {card.paymentStatus ? (
+            <>
+              <p className="text-xs opacity-70 mb-0.5">Payment Status</p>
+              <p className="text-sm font-semibold text-emerald-200 bg-emerald-500/30 rounded-lg px-2 py-1 inline-block">
+                ✓ {card.paymentStatus}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-xs opacity-70 mb-0.5">Current Balance</p>
+              <p className="text-xl font-bold">
+                ${(card.currentBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            </>
+          )}
         </div>
 
         {/* Wait to Purchase Indicator */}

@@ -10,6 +10,7 @@ export interface CreditCard {
   creditLimit?: number;
   currentBalance?: number;
   teamId?: string;
+  paymentStatus?: string; // e.g., "Payment not required at this time"
 }
 
 export type CardColor = CreditCard['color'];
