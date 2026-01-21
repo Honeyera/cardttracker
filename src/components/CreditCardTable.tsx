@@ -2,7 +2,7 @@ import { CreditCard, cardColorClasses } from '@/types/creditCard';
 import { getDaysUntil, getNextOccurrence, formatDate, getUrgencyLevel } from '@/utils/dateUtils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { LayoutList } from 'lucide-react';
+import { LayoutList, CheckCircle } from 'lucide-react';
 
 interface CreditCardTableProps {
   cards: CreditCard[];
@@ -85,14 +85,21 @@ export function CreditCardTable({ cards, onEdit }: CreditCardTableProps) {
                     )}
                   </TableCell>
 
-                  {/* Balance */}
+                  {/* Balance / Payment Status */}
                   <TableCell className="text-right">
-                    <span className="font-semibold text-card-foreground">
-                      ${(card.currentBalance || 0).toLocaleString('en-US', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </span>
+                    {card.paymentStatus ? (
+                      <div className="flex items-center justify-end gap-1.5 text-emerald-600">
+                        <CheckCircle className="w-4 h-4" />
+                        <span className="text-sm font-medium">No payment due</span>
+                      </div>
+                    ) : (
+                      <span className="font-semibold text-card-foreground">
+                        ${(card.currentBalance || 0).toLocaleString('en-US', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
+                    )}
                   </TableCell>
 
                   {/* Closing Date */}
