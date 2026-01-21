@@ -87,19 +87,20 @@ export function CreditCardTable({ cards, onEdit }: CreditCardTableProps) {
 
                   {/* Balance / Payment Status */}
                   <TableCell className="text-right">
-                    {card.paymentStatus ? (
-                      <div className="flex items-center justify-end gap-1.5 text-emerald-600">
-                        <CheckCircle className="w-4 h-4" />
-                        <span className="text-sm font-medium">No payment due</span>
-                      </div>
-                    ) : (
+                    <div>
                       <span className="font-semibold text-card-foreground">
                         ${(card.currentBalance || 0).toLocaleString('en-US', {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}
                       </span>
-                    )}
+                      {card.paymentStatus && (
+                        <div className="flex items-center justify-end gap-1 text-emerald-600 mt-0.5">
+                          <CheckCircle className="w-3 h-3" />
+                          <span className="text-xs">No payment due</span>
+                        </div>
+                      )}
+                    </div>
                   </TableCell>
 
                   {/* Closing Date */}
