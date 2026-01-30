@@ -74,9 +74,9 @@ const Index = () => {
     newCards.forEach((card) => addCard(card));
   };
 
-  const handleCardsUpdated = (updates: { id: string; currentBalance: number; paymentStatus?: string }[]) => {
-    updates.forEach(({ id, currentBalance, paymentStatus }) => {
-      updateCard(id, { currentBalance, paymentStatus });
+  const handleCardsUpdated = (updates: { id: string; currentBalance: number; totalBalance?: number; paymentStatus?: string }[]) => {
+    updates.forEach(({ id, currentBalance, totalBalance, paymentStatus }) => {
+      updateCard(id, { currentBalance, totalBalance, paymentStatus });
     });
   };
 

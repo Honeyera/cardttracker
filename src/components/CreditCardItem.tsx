@@ -57,12 +57,20 @@ export function CreditCardItem({ card, onEdit, onDelete }: CreditCardItemProps) 
             </p>
           </div>
           
-          {/* Total Balance (Available Credit) */}
+          {/* Total Balance */}
+          <div>
+            <p className="text-xs opacity-70 mb-0.5">Total Balance</p>
+            <p className="text-sm font-semibold">
+              ${(card.totalBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+          </div>
+
+          {/* Available Credit */}
           {card.creditLimit && card.creditLimit > 0 && (
             <div>
               <p className="text-xs opacity-70 mb-0.5">Available Credit</p>
               <p className="text-sm font-semibold">
-                ${((card.creditLimit || 0) - (card.currentBalance || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${((card.creditLimit || 0) - (card.totalBalance || card.currentBalance || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
           )}

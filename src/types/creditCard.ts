@@ -8,7 +8,8 @@ export interface CreditCard {
   dueDay: number; // Day of month (1-31)
   color: 'navy' | 'teal' | 'slate' | 'ocean' | 'gold' | 'rose' | 'purple' | 'emerald';
   creditLimit?: number;
-  currentBalance?: number;
+  currentBalance?: number; // Remaining statement balance
+  totalBalance?: number; // Total balance on the card
   teamId?: string;
   paymentStatus?: string; // e.g., "Payment not required at this time"
 }

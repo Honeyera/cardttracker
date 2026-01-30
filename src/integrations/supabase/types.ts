@@ -35,6 +35,7 @@ export type Database = {
           payment_status: string | null
           statement_date: number | null
           team_id: string | null
+          total_balance: number | null
           updated_at: string
           user_id: string
         }
@@ -58,6 +59,7 @@ export type Database = {
           payment_status?: string | null
           statement_date?: number | null
           team_id?: string | null
+          total_balance?: number | null
           updated_at?: string
           user_id: string
         }
@@ -81,6 +83,7 @@ export type Database = {
           payment_status?: string | null
           statement_date?: number | null
           team_id?: string | null
+          total_balance?: number | null
           updated_at?: string
           user_id?: string
         }
