@@ -31,7 +31,6 @@ export function CreditCardTable({ cards, onEdit }: CreditCardTableProps) {
               <TableHead>Company</TableHead>
               <TableHead className="text-right">Remaining Statement</TableHead>
               <TableHead className="text-right">Total Balance</TableHead>
-              <TableHead className="text-right">Available Credit</TableHead>
               <TableHead className="text-center">Closing</TableHead>
               <TableHead className="text-center">Due</TableHead>
             </TableRow>
@@ -113,20 +112,6 @@ export function CreditCardTable({ cards, onEdit }: CreditCardTableProps) {
                         maximumFractionDigits: 2,
                       })}
                     </span>
-                  </TableCell>
-
-                  {/* Available Credit */}
-                  <TableCell className="text-right">
-                    {card.creditLimit && card.creditLimit > 0 ? (
-                      <span className="font-semibold text-card-foreground">
-                        ${((card.creditLimit || 0) - (card.totalBalance || card.currentBalance || 0)).toLocaleString('en-US', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground/50">—</span>
-                    )}
                   </TableCell>
 
                   {/* Closing Date */}
