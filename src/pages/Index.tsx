@@ -87,6 +87,10 @@ const Index = () => {
     navigate('/auth');
   };
 
+  const handleBalanceUpdate = (id: string, field: 'currentBalance' | 'totalBalance', value: number) => {
+    updateCard(id, { [field]: value });
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
@@ -213,6 +217,7 @@ const Index = () => {
                           card={card}
                           onEdit={handleEdit}
                           onDelete={deleteCard}
+                          onUpdateBalance={handleBalanceUpdate}
                         />
                       ))}
                     </div>
@@ -223,7 +228,7 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="table" className="mt-0">
-            <CreditCardTable cards={cards} onEdit={handleEdit} />
+            <CreditCardTable cards={cards} onEdit={handleEdit} onUpdateBalance={handleBalanceUpdate} />
           </TabsContent>
         </Tabs>
 

@@ -2,14 +2,16 @@ import { CreditCard, cardColorClasses } from '@/types/creditCard';
 import { getDaysUntil, getNextOccurrence, formatDate, getUrgencyLevel } from '@/utils/dateUtils';
 import { CreditCard as CreditCardIcon, Calendar, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { EditableBalance } from '@/components/EditableBalance';
 
 interface CreditCardItemProps {
   card: CreditCard;
   onEdit: (card: CreditCard) => void;
   onDelete: (id: string) => void;
+  onUpdateBalance?: (id: string, field: 'currentBalance' | 'totalBalance', value: number) => void;
 }
 
-export function CreditCardItem({ card, onEdit, onDelete }: CreditCardItemProps) {
+export function CreditCardItem({ card, onEdit, onDelete, onUpdateBalance }: CreditCardItemProps) {
   const daysUntilDue = getDaysUntil(card.dueDay);
   const daysUntilClosing = getDaysUntil(card.closingDay);
   const dueDate = getNextOccurrence(card.dueDay);
@@ -53,7 +55,14 @@ export function CreditCardItem({ card, onEdit, onDelete }: CreditCardItemProps) 
           <div>
             <p className="text-xs opacity-70 mb-0.5">Remaining Statement Balance</p>
             <p className="text-xl font-bold">
-              ${(card.currentBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {onUpdateBalance ? (
+                <EditableBalance
+                  value={card.currentBalance || 0}
+                  onSave={(value) => onUpdateBalance(card.id, 'currentBalance', value)}
+                />
+              ) : (
+                `$${(card.currentBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              )}
             </p>
           </div>
           
@@ -61,7 +70,14 @@ export function CreditCardItem({ card, onEdit, onDelete }: CreditCardItemProps) 
           <div>
             <p className="text-xs opacity-70 mb-0.5">Total Balance</p>
             <p className="text-sm font-semibold">
-              ${(card.totalBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {onUpdateBalance ? (
+                <EditableBalance
+                  value={card.totalBalance || 0}
+                  onSave={(value) => onUpdateBalance(card.id, 'totalBalance', value)}
+                />
+              ) : (
+                `$${(card.totalBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              )}
             </p>
           </div>
 

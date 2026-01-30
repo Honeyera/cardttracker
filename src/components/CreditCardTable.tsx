@@ -3,13 +3,15 @@ import { getDaysUntil, getNextOccurrence, formatDate, getUrgencyLevel } from '@/
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { LayoutList, CheckCircle } from 'lucide-react';
+import { EditableBalance } from '@/components/EditableBalance';
 
 interface CreditCardTableProps {
   cards: CreditCard[];
   onEdit: (card: CreditCard) => void;
+  onUpdateBalance?: (id: string, field: 'currentBalance' | 'totalBalance', value: number) => void;
 }
 
-export function CreditCardTable({ cards, onEdit }: CreditCardTableProps) {
+export function CreditCardTable({ cards, onEdit, onUpdateBalance }: CreditCardTableProps) {
   if (cards.length === 0) {
     return null;
   }
@@ -90,10 +92,18 @@ export function CreditCardTable({ cards, onEdit }: CreditCardTableProps) {
                   <TableCell className="text-right">
                     <div>
                       <span className="font-semibold text-card-foreground">
-                        ${(card.currentBalance || 0).toLocaleString('en-US', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
+                        {onUpdateBalance ? (
+                          <EditableBalance
+                            value={card.currentBalance || 0}
+                            onSave={(value) => onUpdateBalance(card.id, 'currentBalance', value)}
+                            labelClassName="hover:bg-muted"
+                          />
+                        ) : (
+                          `$${(card.currentBalance || 0).toLocaleString('en-US', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}`
+                        )}
                       </span>
                       {card.paymentStatus && (
                         <div className="flex items-center justify-end gap-1 text-emerald-600 mt-0.5">
@@ -107,10 +117,18 @@ export function CreditCardTable({ cards, onEdit }: CreditCardTableProps) {
                   {/* Total Balance */}
                   <TableCell className="text-right">
                     <span className="font-semibold text-card-foreground">
-                      ${(card.totalBalance || 0).toLocaleString('en-US', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {onUpdateBalance ? (
+                        <EditableBalance
+                          value={card.totalBalance || 0}
+                          onSave={(value) => onUpdateBalance(card.id, 'totalBalance', value)}
+                          labelClassName="hover:bg-muted"
+                        />
+                      ) : (
+                        `$${(card.totalBalance || 0).toLocaleString('en-US', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}`
+                      )}
                     </span>
                   </TableCell>
 
