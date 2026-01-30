@@ -19,6 +19,7 @@ type DbCard = {
   due_date: number | null;
   credit_limit: number | null;
   current_balance: number | null;
+  total_balance: number | null;
   display_order: number | null;
   created_at: string;
   team_id: string | null;
@@ -37,6 +38,7 @@ function dbToModel(card: DbCard): CreditCard {
     color: (card.network as CreditCard['color']) || 'navy',
     creditLimit: Number(card.credit_limit) || 0,
     currentBalance: Number(card.current_balance) || 0,
+    totalBalance: Number(card.total_balance) || 0,
     teamId: card.team_id ?? undefined,
     paymentStatus: card.payment_status ?? undefined,
   };
@@ -223,6 +225,7 @@ export function useCreditCards() {
     if (updates.dueDay !== undefined) dbUpdates.due_date = updates.dueDay;
     if (updates.creditLimit !== undefined) dbUpdates.credit_limit = updates.creditLimit;
     if (updates.currentBalance !== undefined) dbUpdates.current_balance = updates.currentBalance;
+    if (updates.totalBalance !== undefined) dbUpdates.total_balance = updates.totalBalance;
     if (updates.paymentStatus !== undefined) dbUpdates.payment_status = updates.paymentStatus;
 
     const { error } = await supabase.from('credit_cards').update(dbUpdates).eq('id', id);

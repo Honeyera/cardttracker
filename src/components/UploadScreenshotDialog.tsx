@@ -17,12 +17,13 @@ interface UploadScreenshotDialogProps {
   onOpenChange: (open: boolean) => void;
   existingCards: CreditCard[];
   onCardsFound: (newCards: Omit<CreditCard, 'id'>[]) => void;
-  onCardsUpdated: (updates: { id: string; currentBalance: number; paymentStatus?: string }[]) => void;
+  onCardsUpdated: (updates: { id: string; currentBalance: number; totalBalance?: number; paymentStatus?: string }[]) => void;
 }
 
 interface MatchedCard {
   existingCard: CreditCard;
   newBalance: number;
+  newTotalBalance?: number;
   newPaymentStatus?: string;
 }
 
@@ -32,7 +33,8 @@ interface ParsedCard {
   closingDay: number;
   dueDay: number;
   color: CardColor;
-  currentBalance: number;
+  currentBalance: number; // Remaining statement balance
+  totalBalance?: number; // Total balance on card
   creditLimit?: number;
   paymentStatus?: string;
 }
@@ -110,7 +112,8 @@ export function UploadScreenshotDialog({
           closingDay: Math.min(31, Math.max(1, parseInt(card?.closingDay) || 15)),
           dueDay: Math.min(31, Math.max(1, parseInt(card?.dueDay) || 22)),
           color: cardColors[index % cardColors.length],
-          currentBalance: parseFloat(card?.currentBalance) || 0,
+          currentBalance: parseFloat(card?.remainingStatementBalance) || parseFloat(card?.currentBalance) || 0,
+          totalBalance: parseFloat(card?.totalBalance) || undefined,
           creditLimit: card?.creditLimit ? parseFloat(card.creditLimit) : undefined,
           paymentStatus: card?.paymentStatus || undefined,
         }));
@@ -135,13 +138,17 @@ export function UploadScreenshotDialog({
             // Check if balance or payment status changed
             const existingBalance = existing.currentBalance || 0;
             const newBalance = parsedCard.currentBalance || 0;
+            const existingTotal = existing.totalBalance || 0;
+            const newTotal = parsedCard.totalBalance || 0;
             const balanceChanged = Math.abs(existingBalance - newBalance) >= 0.01;
+            const totalChanged = Math.abs(existingTotal - newTotal) >= 0.01;
             const statusChanged = parsedCard.paymentStatus !== existing.paymentStatus;
             
-            if (balanceChanged || statusChanged) {
+            if (balanceChanged || totalChanged || statusChanged) {
               matchedCardsList.push({
                 existingCard: existing,
                 newBalance: parsedCard.currentBalance,
+                newTotalBalance: parsedCard.totalBalance,
                 newPaymentStatus: parsedCard.paymentStatus,
               });
             } else {
@@ -188,6 +195,7 @@ export function UploadScreenshotDialog({
       const updates = matchedCards.map((m) => ({
         id: m.existingCard.id,
         currentBalance: m.newBalance,
+        totalBalance: m.newTotalBalance,
         paymentStatus: m.newPaymentStatus,
       }));
       onCardsUpdated(updates);
