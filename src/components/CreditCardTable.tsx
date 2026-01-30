@@ -29,7 +29,8 @@ export function CreditCardTable({ cards, onEdit }: CreditCardTableProps) {
               <TableHead className="w-[200px]">Card</TableHead>
               <TableHead>Owner</TableHead>
               <TableHead>Company</TableHead>
-              <TableHead className="text-right">Balance</TableHead>
+              <TableHead className="text-right">Statement Balance</TableHead>
+              <TableHead className="text-right">Total Balance</TableHead>
               <TableHead className="text-center">Closing</TableHead>
               <TableHead className="text-center">Due</TableHead>
             </TableRow>
@@ -85,7 +86,7 @@ export function CreditCardTable({ cards, onEdit }: CreditCardTableProps) {
                     )}
                   </TableCell>
 
-                  {/* Balance / Payment Status */}
+                  {/* Remaining Statement Balance */}
                   <TableCell className="text-right">
                     <div>
                       <span className="font-semibold text-card-foreground">
@@ -101,6 +102,16 @@ export function CreditCardTable({ cards, onEdit }: CreditCardTableProps) {
                         </div>
                       )}
                     </div>
+                  </TableCell>
+
+                  {/* Total Balance */}
+                  <TableCell className="text-right">
+                    <span className="font-semibold text-card-foreground">
+                      ${(card.totalBalance || 0).toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
                   </TableCell>
 
                   {/* Closing Date */}
