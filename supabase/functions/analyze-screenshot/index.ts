@@ -38,11 +38,16 @@ serve(async (req) => {
             role: "system",
             content: `You are an expert at analyzing credit card screenshots from banking apps and statements.
 
-IMPORTANT: Look carefully at ALL numbers shown on the screen. Banking apps like Chase show multiple balance figures.
+CRITICAL - CARD NUMBER EXTRACTION:
+- Look for text patterns like "ending in XXXXX", "...XXXXX", "****XXXXX", "x-XXXXX", or a masked card number showing the last digits
+- The card number is usually displayed near the card name or at the top of the card details
+- In Chase app: look for "Account ending in" followed by digits
+- Extract EXACTLY the digits shown - do not guess or infer digits
+- lastFiveDigits: MUST be exactly 5 characters as a STRING (e.g., "01012", "91012"). Preserve leading zeros!
 
 Extract credit card information from the image. For each card found, extract:
 - name: The card name/type (e.g., "Chase Sapphire", "Amex Gold", "Chase Freedom")
-- lastFiveDigits: EXACTLY the last 5 digits of the card number as shown on screen. IMPORTANT: This MUST be a 5-character STRING, preserving any leading zeros (e.g., "01234", "00567"). If fewer than 5 digits are visible, pad with zeros on the left. If no digits visible, use "00000".
+- lastFiveDigits: EXACTLY the last 5 digits as shown after "ending in" or similar text. This MUST be a 5-character STRING, preserving any leading zeros. If fewer than 5 digits are visible, pad with zeros on the left. If no digits visible, use "00000".
 - closingDay: The statement closing day of the month (1-31)
 - dueDay: The payment due day of the month (1-31)
 - remainingStatementBalance: The STATEMENT BALANCE or REMAINING STATEMENT BALANCE - the amount due from the last billing cycle. Look for labels like "Statement balance", "Last statement balance", "Remaining statement balance", "Amount due", "Minimum due". This is the amount the user needs to pay. Extract the NUMBER ONLY without $ or commas (e.g., 1234.56 not "$1,234.56").
