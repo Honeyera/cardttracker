@@ -36,19 +36,30 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: `You are an expert at analyzing credit card screenshots and statements. 
+            content: `You are an expert at analyzing credit card screenshots from banking apps and statements.
+
+IMPORTANT: Look carefully at ALL numbers shown on the screen. Banking apps like Chase show multiple balance figures.
+
 Extract credit card information from the image. For each card found, extract:
-- name: The card name/type (e.g., "Chase Sapphire", "Amex Gold")
+- name: The card name/type (e.g., "Chase Sapphire", "Amex Gold", "Chase Freedom")
 - lastFiveDigits: EXACTLY the last 5 digits of the card number as shown on screen. IMPORTANT: This MUST be a 5-character STRING, preserving any leading zeros (e.g., "01234", "00567"). If fewer than 5 digits are visible, pad with zeros on the left. If no digits visible, use "00000".
 - closingDay: The statement closing day of the month (1-31)
 - dueDay: The payment due day of the month (1-31)
-- remainingStatementBalance: The remaining statement balance - the amount still owed on the current statement (number only, no currency symbol). This is sometimes labeled "Statement Balance", "Remaining Balance", "Amount Due", or similar.
-- totalBalance: The total balance on the card - the full amount owed including pending transactions (number only, no currency symbol). This is sometimes labeled "Total Balance", "Current Balance", "Total Amount", or similar.
+- remainingStatementBalance: The STATEMENT BALANCE or REMAINING STATEMENT BALANCE - the amount due from the last billing cycle. Look for labels like "Statement balance", "Last statement balance", "Remaining statement balance", "Amount due", "Minimum due". This is the amount the user needs to pay. Extract the NUMBER ONLY without $ or commas (e.g., 1234.56 not "$1,234.56").
+- totalBalance: The CURRENT/TOTAL BALANCE - the full amount currently owed including recent transactions. Look for labels like "Current balance", "Total balance", "Balance". This is usually the larger number. Extract the NUMBER ONLY without $ or commas.
 - creditLimit: The credit limit if visible (number only, no currency symbol)
 - paymentStatus: If you see text like "Payment not required at this time", "No payment due", "Paid in full", or similar status messages, include the exact text here. Otherwise, leave it null.
 
-CRITICAL: lastFiveDigits must ALWAYS be exactly 5 characters, as a STRING with quotes. Never return it as a number.
-IMPORTANT: Distinguish between remainingStatementBalance (what's due on the statement) and totalBalance (total owed on the card). If only one balance is shown, put it in totalBalance.
+CHASE APP SPECIFIC: In Chase app screenshots:
+- "Current balance" = totalBalance (the full amount owed now)
+- "Statement balance" or "Last statement balance" = remainingStatementBalance (what's due from billing cycle)
+- Look for both values - they are usually displayed prominently
+
+CRITICAL RULES:
+1. lastFiveDigits must ALWAYS be exactly 5 characters, as a STRING with quotes. Never return it as a number.
+2. ALL balance values must be NUMBERS, not strings. Remove $ signs and commas before returning.
+3. If you see "$1,234.56", return 1234.56 as the number.
+4. BOTH remainingStatementBalance AND totalBalance should be extracted if visible - they are different values!
 
 Return ONLY valid JSON in this exact format, no markdown:
 {
@@ -67,7 +78,7 @@ Return ONLY valid JSON in this exact format, no markdown:
 }
 
 If you cannot find any credit cards, return: {"cards": []}
-If a field is not visible, use reasonable defaults: closingDay=15, dueDay=22, remainingStatementBalance=0, totalBalance=0.`
+If a field is not visible, use reasonable defaults: closingDay=15, dueDay=22. For balances, only use 0 if you truly cannot find any balance information.`
           },
           {
             role: "user",
@@ -109,6 +120,8 @@ If a field is not visible, use reasonable defaults: closingDay=15, dueDay=22, re
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
 
+    console.log("Raw AI response content:", content);
+
     if (!content) {
       throw new Error("No content in AI response");
     }
@@ -120,6 +133,7 @@ If a field is not visible, use reasonable defaults: closingDay=15, dueDay=22, re
       const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
       const jsonStr = jsonMatch ? jsonMatch[1] : content;
       parsedCards = JSON.parse(jsonStr.trim());
+      console.log("Parsed cards data:", JSON.stringify(parsedCards, null, 2));
     } catch (e) {
       console.error("Failed to parse AI response:", content);
       throw new Error("Failed to parse card data from image");
