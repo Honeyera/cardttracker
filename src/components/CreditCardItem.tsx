@@ -47,22 +47,31 @@ export function CreditCardItem({ card, onEdit, onDelete }: CreditCardItemProps) 
           <CreditCardIcon className="w-6 h-6 opacity-80" />
         </div>
 
-        {/* Balance or Payment Status */}
-        <div className="mb-3">
-          {card.paymentStatus ? (
-            <>
-              <p className="text-xs opacity-70 mb-0.5">Payment Status</p>
-              <p className="text-sm font-semibold text-emerald-200 bg-emerald-500/30 rounded-lg px-2 py-1 inline-block">
-                ✓ {card.paymentStatus}
+        {/* Balance Section */}
+        <div className="mb-3 space-y-2">
+          {/* Remaining Statement Balance */}
+          <div>
+            <p className="text-xs opacity-70 mb-0.5">Remaining Statement Balance</p>
+            <p className="text-xl font-bold">
+              ${(card.currentBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+          </div>
+          
+          {/* Total Balance (Available Credit) */}
+          {card.creditLimit && card.creditLimit > 0 && (
+            <div>
+              <p className="text-xs opacity-70 mb-0.5">Available Credit</p>
+              <p className="text-sm font-semibold">
+                ${((card.creditLimit || 0) - (card.currentBalance || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
-            </>
-          ) : (
-            <>
-              <p className="text-xs opacity-70 mb-0.5">Current Balance</p>
-              <p className="text-xl font-bold">
-                ${(card.currentBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
-            </>
+            </div>
+          )}
+
+          {/* Payment Status */}
+          {card.paymentStatus && (
+            <p className="text-sm font-semibold text-emerald-200 bg-emerald-500/30 rounded-lg px-2 py-1 inline-block">
+              ✓ {card.paymentStatus}
+            </p>
           )}
         </div>
 
