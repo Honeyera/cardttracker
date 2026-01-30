@@ -125,7 +125,7 @@ export function CreditCardTable({ cards, onEdit }: CreditCardTableProps) {
                           closingUrgency === 'normal' && 'text-card-foreground'
                         )}
                       >
-                        {formatDate(closingDate).slice(0, -6)}
+                        {formatDate(closingDate)}
                       </p>
                       <p
                         className={cn(
@@ -151,7 +151,7 @@ export function CreditCardTable({ cards, onEdit }: CreditCardTableProps) {
                           dueUrgency === 'normal' && 'text-card-foreground'
                         )}
                       >
-                        {formatDate(dueDate).slice(0, -6)}
+                        {formatDate(dueDate)}
                       </p>
                       <p
                         className={cn(
