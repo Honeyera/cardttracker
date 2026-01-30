@@ -15,7 +15,8 @@ export function DashboardStats({ cards }: DashboardStatsProps) {
     return daysUntil <= 7;
   });
   
-  const totalBalance = cards.reduce((sum, card) => sum + (card.currentBalance || 0), 0);
+  const totalBalance = cards.reduce((sum, card) => sum + (card.totalBalance || 0), 0);
+  const remainingStatementBalance = cards.reduce((sum, card) => sum + (card.currentBalance || 0), 0);
 
   // Group cards by owner name
   const ownerCounts = cards.reduce((acc, card) => {
@@ -46,16 +47,23 @@ export function DashboardStats({ cards }: DashboardStatsProps) {
         : 'No payments due',
     },
     {
+      label: 'Remaining Statement',
+      value: `$${remainingStatementBalance.toLocaleString()}`,
+      icon: DollarSign,
+      color: 'accent' as const,
+      subtext: 'statement balance due',
+    },
+    {
       label: 'Total Balance',
       value: `$${totalBalance.toLocaleString()}`,
       icon: DollarSign,
-      color: 'accent' as const,
+      color: 'success' as const,
       subtext: 'across all cards',
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {stats.map((stat) => (
         <StatTile key={stat.label} {...stat} />
       ))}
