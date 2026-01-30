@@ -20,13 +20,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { SortableCardItem } from '@/components/SortableCardItem';
 import { AddCardDialog } from '@/components/AddCardDialog';
 import { UploadScreenshotDialog } from '@/components/UploadScreenshotDialog';
+import { PasteTextDialog } from '@/components/PasteTextDialog';
 import { UpcomingDates } from '@/components/UpcomingDates';
 import { CreditCardTable } from '@/components/CreditCardTable';
 import { DashboardStats } from '@/components/DashboardStats';
 import { TeamManagement } from '@/components/TeamManagement';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, CreditCard, Wallet, Upload, LogOut, Loader2, Users, LayoutGrid, Table } from 'lucide-react';
+import { Plus, CreditCard, Wallet, Upload, LogOut, Loader2, Users, LayoutGrid, Table, ClipboardPaste } from 'lucide-react';
 import { CreditCard as CreditCardType } from '@/types/creditCard';
 
 const Index = () => {
@@ -35,6 +36,7 @@ const Index = () => {
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<CreditCardType | null>(null);
   const [showTeamPanel, setShowTeamPanel] = useState(false);
 
@@ -127,7 +129,11 @@ const Index = () => {
             </Button>
             <Button onClick={() => setUploadDialogOpen(true)} size="sm" variant="outline">
               <Upload className="w-4 h-4 mr-1" />
-              Upload Screenshot
+              Screenshot
+            </Button>
+            <Button onClick={() => setPasteDialogOpen(true)} size="sm" variant="outline">
+              <ClipboardPaste className="w-4 h-4 mr-1" />
+              Paste Text
             </Button>
             <Button onClick={() => setDialogOpen(true)} size="sm">
               <Plus className="w-4 h-4 mr-1" />
@@ -239,6 +245,15 @@ const Index = () => {
       <UploadScreenshotDialog
         open={uploadDialogOpen}
         onOpenChange={setUploadDialogOpen}
+        existingCards={cards}
+        onCardsFound={handleCardsFromScreenshot}
+        onCardsUpdated={handleCardsUpdated}
+      />
+
+      {/* Paste Text Dialog */}
+      <PasteTextDialog
+        open={pasteDialogOpen}
+        onOpenChange={setPasteDialogOpen}
         existingCards={cards}
         onCardsFound={handleCardsFromScreenshot}
         onCardsUpdated={handleCardsUpdated}
