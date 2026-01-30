@@ -8,9 +8,10 @@ interface SortableCardItemProps {
   card: CreditCard;
   onEdit: (card: CreditCard) => void;
   onDelete: (id: string) => void;
+  onUpdateBalance?: (id: string, field: 'currentBalance' | 'totalBalance', value: number) => void;
 }
 
-export function SortableCardItem({ card, onEdit, onDelete }: SortableCardItemProps) {
+export function SortableCardItem({ card, onEdit, onDelete, onUpdateBalance }: SortableCardItemProps) {
   const {
     attributes,
     listeners,
@@ -42,6 +43,7 @@ export function SortableCardItem({ card, onEdit, onDelete }: SortableCardItemPro
         card={card}
         onEdit={onEdit}
         onDelete={onDelete}
+        onUpdateBalance={onUpdateBalance}
       />
     </div>
   );
