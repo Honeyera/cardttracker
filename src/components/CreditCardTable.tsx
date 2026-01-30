@@ -29,7 +29,7 @@ export function CreditCardTable({ cards, onEdit }: CreditCardTableProps) {
               <TableHead className="w-[200px]">Card</TableHead>
               <TableHead>Owner</TableHead>
               <TableHead>Company</TableHead>
-              <TableHead className="text-right">Statement Balance</TableHead>
+              <TableHead className="text-right">Remaining Statement</TableHead>
               <TableHead className="text-right">Total Balance</TableHead>
               <TableHead className="text-right">Available Credit</TableHead>
               <TableHead className="text-center">Closing</TableHead>
