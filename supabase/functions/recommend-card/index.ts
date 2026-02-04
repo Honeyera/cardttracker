@@ -66,6 +66,7 @@ Respond with a JSON object in this exact format:
     {
       "rank": 1,
       "cardName": "card name",
+      "lastFiveDigits": "12345",
       "daysUntilPayment": number,
       "nextClosingDate": "Month Day",
       "paymentDueDate": "Month Day", 
@@ -74,6 +75,7 @@ Respond with a JSON object in this exact format:
     {
       "rank": 2,
       "cardName": "card name",
+      "lastFiveDigits": "12345",
       "daysUntilPayment": number,
       "nextClosingDate": "Month Day",
       "paymentDueDate": "Month Day", 
@@ -82,6 +84,7 @@ Respond with a JSON object in this exact format:
     {
       "rank": 3,
       "cardName": "card name",
+      "lastFiveDigits": "12345",
       "daysUntilPayment": number,
       "nextClosingDate": "Month Day",
       "paymentDueDate": "Month Day", 
@@ -90,7 +93,7 @@ Respond with a JSON object in this exact format:
   ]
 }
 
-If there are fewer than 3 cards, include only as many as available.`;
+If there are fewer than 3 cards, include only as many as available. Make sure to include the exact lastFiveDigits from the card data provided.`;
 
     const userPrompt = `I want to make a charge of $${chargeAmount.toLocaleString()}. 
 
