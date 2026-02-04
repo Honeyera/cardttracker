@@ -1,9 +1,13 @@
+import { useState, useMemo } from 'react';
 import { CreditCard, cardColorClasses } from '@/types/creditCard';
 import { getDaysUntil, getNextOccurrence, formatDate, getUrgencyLevel } from '@/utils/dateUtils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { LayoutList, CheckCircle } from 'lucide-react';
+import { LayoutList, CheckCircle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { EditableBalance } from '@/components/EditableBalance';
+
+type SortField = 'name' | 'owner' | 'company' | 'currentBalance' | 'totalBalance' | 'closing' | 'due';
+type SortDirection = 'asc' | 'desc';
 
 interface CreditCardTableProps {
   cards: CreditCard[];
@@ -12,6 +16,73 @@ interface CreditCardTableProps {
 }
 
 export function CreditCardTable({ cards, onEdit, onUpdateBalance }: CreditCardTableProps) {
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedCards = useMemo(() => {
+    if (!sortField) return cards;
+
+    return [...cards].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortField) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'owner':
+          comparison = (a.ownerName || '').localeCompare(b.ownerName || '');
+          break;
+        case 'company':
+          comparison = (a.companyName || '').localeCompare(b.companyName || '');
+          break;
+        case 'currentBalance':
+          comparison = (a.currentBalance || 0) - (b.currentBalance || 0);
+          break;
+        case 'totalBalance':
+          comparison = (a.totalBalance || 0) - (b.totalBalance || 0);
+          break;
+        case 'closing':
+          comparison = getDaysUntil(a.closingDay) - getDaysUntil(b.closingDay);
+          break;
+        case 'due':
+          comparison = getDaysUntil(a.dueDay) - getDaysUntil(b.dueDay);
+          break;
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [cards, sortField, sortDirection]);
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="w-3.5 h-3.5 ml-1 opacity-50" />;
+    }
+    return sortDirection === 'asc' 
+      ? <ArrowUp className="w-3.5 h-3.5 ml-1" />
+      : <ArrowDown className="w-3.5 h-3.5 ml-1" />;
+  };
+
+  const SortableHeader = ({ field, children, className }: { field: SortField; children: React.ReactNode; className?: string }) => (
+    <TableHead 
+      className={cn("cursor-pointer hover:bg-muted/50 transition-colors select-none", className)}
+      onClick={() => handleSort(field)}
+    >
+      <div className="flex items-center">
+        {children}
+        <SortIcon field={field} />
+      </div>
+    </TableHead>
+  );
+
   if (cards.length === 0) {
     return null;
   }
@@ -28,17 +99,17 @@ export function CreditCardTable({ cards, onEdit, onUpdateBalance }: CreditCardTa
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[200px]">Card</TableHead>
-              <TableHead>Owner</TableHead>
-              <TableHead>Company</TableHead>
-              <TableHead className="text-right">Remaining Statement</TableHead>
-              <TableHead className="text-right">Total Balance</TableHead>
-              <TableHead className="text-center">Closing</TableHead>
-              <TableHead className="text-center">Due</TableHead>
+              <SortableHeader field="name" className="w-[200px]">Card</SortableHeader>
+              <SortableHeader field="owner">Owner</SortableHeader>
+              <SortableHeader field="company">Company</SortableHeader>
+              <SortableHeader field="currentBalance" className="text-right">Remaining Statement</SortableHeader>
+              <SortableHeader field="totalBalance" className="text-right">Total Balance</SortableHeader>
+              <SortableHeader field="closing" className="text-center">Closing</SortableHeader>
+              <SortableHeader field="due" className="text-center">Due</SortableHeader>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {cards.map((card) => {
+            {sortedCards.map((card) => {
               const daysUntilDue = getDaysUntil(card.dueDay);
               const daysUntilClosing = getDaysUntil(card.closingDay);
               const dueDate = getNextOccurrence(card.dueDay);
