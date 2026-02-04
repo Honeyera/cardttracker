@@ -15,6 +15,7 @@ interface ChargeRecommendationProps {
 interface CardRecommendation {
   rank: number;
   cardName: string;
+  lastFiveDigits: string;
   daysUntilPayment: number;
   nextClosingDate: string;
   paymentDueDate: string;
@@ -163,6 +164,7 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
                   </div>
                   <div className="flex-1">
                     <p className="font-semibold text-card-foreground">{rec.cardName}</p>
+                    <p className="text-xs text-muted-foreground font-mono">•••• {rec.lastFiveDigits || '•••••'}</p>
                   </div>
                   <div className={cn(
                     "px-3 py-1 rounded-full text-sm font-semibold",
