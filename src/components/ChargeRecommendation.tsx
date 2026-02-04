@@ -12,18 +12,23 @@ interface ChargeRecommendationProps {
   cards: CreditCard[];
 }
 
-interface Recommendation {
-  recommendedCard: string;
+interface CardRecommendation {
+  rank: number;
+  cardName: string;
   daysUntilPayment: number;
   nextClosingDate: string;
   paymentDueDate: string;
   explanation: string;
 }
 
+interface RecommendationResponse {
+  recommendations: CardRecommendation[];
+}
+
 export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
-  const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
+  const [recommendations, setRecommendations] = useState<CardRecommendation[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -44,7 +49,7 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
 
     setLoading(true);
     setError(null);
-    setRecommendation(null);
+    setRecommendations([]);
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke('recommend-card', {
@@ -71,7 +76,7 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
         throw new Error(data.error);
       }
 
-      setRecommendation(data);
+      setRecommendations(data.recommendations || []);
     } catch (err) {
       console.error('Error getting recommendation:', err);
       const message = err instanceof Error ? err.message : 'Failed to get recommendation';
@@ -135,45 +140,56 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
           </div>
         )}
 
-        {recommendation && (
-          <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <CreditCardIcon className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Recommended Card</p>
-                <p className="font-semibold text-card-foreground">{recommendation.recommendedCard}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-6 pt-2">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-muted-foreground" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Days Until Payment</p>
-                  <p className={cn(
-                    "font-semibold",
-                    recommendation.daysUntilPayment > 30 ? "text-emerald-600" : 
-                    recommendation.daysUntilPayment > 14 ? "text-amber-600" : "text-destructive"
+        {recommendations.length > 0 && (
+          <div className="space-y-3">
+            {recommendations.map((rec, index) => (
+              <div 
+                key={rec.rank} 
+                className={cn(
+                  "p-4 rounded-lg border space-y-3",
+                  index === 0 
+                    ? "bg-primary/5 border-primary/20" 
+                    : "bg-muted/30 border-border"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm",
+                    index === 0 
+                      ? "bg-primary text-primary-foreground" 
+                      : "bg-muted text-muted-foreground"
                   )}>
-                    {recommendation.daysUntilPayment} days
-                  </p>
+                    #{rec.rank}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-card-foreground">{rec.cardName}</p>
+                  </div>
+                  <div className={cn(
+                    "px-3 py-1 rounded-full text-sm font-semibold",
+                    rec.daysUntilPayment > 45 ? "bg-emerald-100 text-emerald-700" : 
+                    rec.daysUntilPayment > 30 ? "bg-amber-100 text-amber-700" : 
+                    "bg-red-100 text-red-700"
+                  )}>
+                    {rec.daysUntilPayment} days
+                  </div>
                 </div>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Next Closing</p>
-                <p className="font-medium text-card-foreground">{recommendation.nextClosingDate}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Payment Due</p>
-                <p className="font-medium text-card-foreground">{recommendation.paymentDueDate}</p>
-              </div>
-            </div>
 
-            <div className="pt-2 border-t border-border">
-              <p className="text-sm text-muted-foreground">{recommendation.explanation}</p>
-            </div>
+                <div className="flex items-center gap-4 text-sm">
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-muted-foreground">Closes:</span>
+                    <span className="font-medium text-card-foreground">{rec.nextClosingDate}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <CreditCardIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-muted-foreground">Due:</span>
+                    <span className="font-medium text-card-foreground">{rec.paymentDueDate}</span>
+                  </div>
+                </div>
+
+                <p className="text-sm text-muted-foreground">{rec.explanation}</p>
+              </div>
+            ))}
           </div>
         )}
       </CardContent>

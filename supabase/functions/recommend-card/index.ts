@@ -46,7 +46,7 @@ serve(async (req) => {
       paymentStatus: card.paymentStatus || null,
     }));
 
-    const systemPrompt = `You are a financial advisor AI that helps users optimize their credit card usage. Your task is to recommend which credit card to use for a purchase to maximize the time before payment is due.
+    const systemPrompt = `You are a financial advisor AI that helps users optimize their credit card usage. Your task is to recommend the TOP 3 credit cards to use for a purchase to maximize the time before payment is due.
 
 Key concepts:
 - The CLOSING DATE (statement date) is when the billing cycle ends and the statement is generated
@@ -56,25 +56,48 @@ Key concepts:
 Strategy for maximum payment deferral:
 1. Find cards where the closing date has JUST passed (you just missed it), meaning charges go to next cycle
 2. Calculate days until the NEXT closing date + days until due date after that
-3. The card with the most combined days wins
+3. Rank cards by combined days - highest is best
 
 Today's date is ${currentMonth} ${currentDay}, ${currentYear}.
 
 Respond with a JSON object in this exact format:
 {
-  "recommendedCard": "card name",
-  "daysUntilPayment": number,
-  "nextClosingDate": "Month Day",
-  "paymentDueDate": "Month Day", 
-  "explanation": "2-3 sentence explanation of why this card gives you the longest time before payment, mentioning specific dates"
-}`;
+  "recommendations": [
+    {
+      "rank": 1,
+      "cardName": "card name",
+      "daysUntilPayment": number,
+      "nextClosingDate": "Month Day",
+      "paymentDueDate": "Month Day", 
+      "explanation": "1-2 sentence explanation of why this card ranks here"
+    },
+    {
+      "rank": 2,
+      "cardName": "card name",
+      "daysUntilPayment": number,
+      "nextClosingDate": "Month Day",
+      "paymentDueDate": "Month Day", 
+      "explanation": "1-2 sentence explanation"
+    },
+    {
+      "rank": 3,
+      "cardName": "card name",
+      "daysUntilPayment": number,
+      "nextClosingDate": "Month Day",
+      "paymentDueDate": "Month Day", 
+      "explanation": "1-2 sentence explanation"
+    }
+  ]
+}
+
+If there are fewer than 3 cards, include only as many as available.`;
 
     const userPrompt = `I want to make a charge of $${chargeAmount.toLocaleString()}. 
 
 Here are my credit cards:
 ${JSON.stringify(cardInfo, null, 2)}
 
-Which card should I use to get the longest time before I have to make a payment? Consider that if I charge after a card's closing date, the charge goes on the next billing cycle.`;
+Which are the TOP 3 cards I should use to get the longest time before I have to make a payment? Rank them from best to worst. Consider that if I charge after a card's closing date, the charge goes on the next billing cycle.`;
 
     console.log('Calling Lovable AI for recommendation...');
 
