@@ -23,6 +23,7 @@ import { UploadScreenshotDialog } from '@/components/UploadScreenshotDialog';
 import { PasteTextDialog } from '@/components/PasteTextDialog';
 import { UpcomingDates } from '@/components/UpcomingDates';
 import { CreditCardTable } from '@/components/CreditCardTable';
+import { ChargeRecommendation } from '@/components/ChargeRecommendation';
 import { DashboardStats } from '@/components/DashboardStats';
 import { TeamManagement } from '@/components/TeamManagement';
 import { Button } from '@/components/ui/button';
@@ -157,6 +158,9 @@ const Index = () => {
 
         {/* Dashboard Stats */}
         <DashboardStats cards={cards} />
+
+        {/* Smart Charge Advisor */}
+        {cards.length > 0 && <ChargeRecommendation cards={cards} />}
 
         {/* Cards Section with Tabs */}
         <Tabs defaultValue="cards" className="w-full">
