@@ -125,7 +125,7 @@ If a field is not visible, use reasonable defaults: closingDay=15, dueDay=22. Fo
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
 
-    console.log("Raw AI response content:", content);
+    console.log("AI response received, length:", content?.length || 0);
 
     if (!content) {
       throw new Error("No content in AI response");
@@ -138,9 +138,9 @@ If a field is not visible, use reasonable defaults: closingDay=15, dueDay=22. Fo
       const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
       const jsonStr = jsonMatch ? jsonMatch[1] : content;
       parsedCards = JSON.parse(jsonStr.trim());
-      console.log("Parsed cards data:", JSON.stringify(parsedCards, null, 2));
+      console.log("Parsed cards count:", parsedCards?.cards?.length || 0);
     } catch (e) {
-      console.error("Failed to parse AI response:", content);
+      console.error("Failed to parse AI response, length:", content?.length || 0);
       throw new Error("Failed to parse card data from image");
     }
 

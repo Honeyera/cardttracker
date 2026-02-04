@@ -152,11 +152,11 @@ Which are the TOP 3 cards I should use to get the longest time before I have to 
     try {
       recommendation = JSON.parse(content);
     } catch (e) {
-      console.error('Failed to parse AI response:', content);
+      console.error('Failed to parse AI response, length:', content?.length || 0);
       throw new Error('Failed to parse AI recommendation');
     }
 
-    console.log('Recommendation:', recommendation);
+    console.log('Recommendation count:', recommendation?.recommendations?.length || 0);
 
     return new Response(
       JSON.stringify(recommendation),
