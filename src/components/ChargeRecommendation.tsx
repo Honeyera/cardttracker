@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { CreditCard } from '@/types/creditCard';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
-import { Sparkles, Loader2, Calendar, CreditCard as CreditCardIcon, AlertCircle, RefreshCw } from 'lucide-react';
+import { Sparkles, Loader2, Calendar, CreditCard as CreditCardIcon, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -44,7 +44,7 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
             creditLimit: card.creditLimit,
             paymentStatus: card.paymentStatus,
           })),
-          chargeAmount: 100, // Default amount for ranking purposes
+          chargeAmount: 100,
         },
       });
 
@@ -60,10 +60,6 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
     }
   };
 
-  useEffect(() => {
-    fetchRecommendations();
-  }, [cards]);
-
   return (
     <Card className="bg-card border-border">
       <CardContent className="p-6">
@@ -73,24 +69,27 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
             <h2 className="text-lg font-semibold text-card-foreground">Smart Charge Advisor</h2>
           </div>
           <Button 
-            variant="ghost" 
-            size="sm" 
             onClick={fetchRecommendations} 
             disabled={loading || cards.length === 0}
+            size="sm"
           >
-            <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 mr-2" />
+                Get Recommendation
+              </>
+            )}
           </Button>
         </div>
 
         <p className="text-sm text-muted-foreground mb-4">
-          Cards ranked by payment deferral—use the top card to maximize time before payment is due.
+          Click to see which card gives you the longest time before payment is due.
         </p>
-
-        {loading && recommendations.length === 0 && (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
-          </div>
-        )}
 
         {error && (
           <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 text-destructive">
