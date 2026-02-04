@@ -1,1 +1,10 @@
 project_id = "kdlspchhgpbhrimuhfno"
+
+[functions.analyze-screenshot]
+verify_jwt = false
+
+[functions.parse-text]
+verify_jwt = false
+
+[functions.recommend-card]
+verify_jwt = false
