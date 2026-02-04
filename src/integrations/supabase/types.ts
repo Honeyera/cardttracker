@@ -161,6 +161,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_view_card_basic_info: {
+        Args: { card_team_id: string; card_user_id: string }
+        Returns: boolean
+      }
+      can_view_card_financial_details: {
+        Args: { card_team_id: string; card_user_id: string }
+        Returns: boolean
+      }
       create_team_with_owner: { Args: { team_name: string }; Returns: string }
       get_team_role: {
         Args: { check_team_id: string; user_uuid: string }

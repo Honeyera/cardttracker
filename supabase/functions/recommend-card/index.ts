@@ -1,9 +1,26 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
+
+// Input validation schema
+const cardSchema = z.object({
+  cards: z.array(z.object({
+    name: z.string().max(100),
+    lastFiveDigits: z.string().max(10),
+    closingDay: z.number().int().min(1).max(31),
+    dueDay: z.number().int().min(1).max(31),
+    currentBalance: z.number().nonnegative().max(1000000000).optional(),
+    totalBalance: z.number().nonnegative().max(1000000000).optional(),
+    creditLimit: z.number().nonnegative().max(1000000000).optional(),
+    paymentStatus: z.string().max(200).nullable().optional()
+  })).min(1, "At least one card required").max(100, "Maximum 100 cards allowed"),
+  chargeAmount: z.number().positive("Charge amount must be positive").max(1000000000, "Charge amount too large")
+});
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -11,16 +28,48 @@ serve(async (req) => {
   }
 
   try {
-    const { cards, chargeAmount } = await req.json();
-    
-    console.log('Received request for card recommendation:', { cardCount: cards?.length, chargeAmount });
-
-    if (!cards || cards.length === 0) {
+    // Authentication check
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
-        JSON.stringify({ error: 'No cards provided' }),
+        JSON.stringify({ error: 'Unauthorized - Authentication required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid or expired token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Parse and validate input
+    const requestData = await req.json();
+    const validationResult = cardSchema.safeParse(requestData);
+    
+    if (!validationResult.success) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid input', 
+          details: validationResult.error.errors 
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const { cards, chargeAmount } = validationResult.data;
+    
+    console.log('Received request for card recommendation:', { cardCount: cards.length, chargeAmount });
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -35,7 +84,7 @@ serve(async (req) => {
     const currentYear = today.getFullYear();
 
     // Prepare card info for the AI
-    const cardInfo = cards.map((card: any) => ({
+    const cardInfo = cards.map((card) => ({
       name: card.name,
       lastFiveDigits: card.lastFiveDigits,
       closingDay: card.closingDay,
@@ -121,8 +170,7 @@ Which are the TOP 3 cards I should use to get the longest time before I have to 
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('AI gateway error:', response.status, errorText);
+      console.error('AI gateway error:', response.status);
       
       if (response.status === 429) {
         return new Response(
@@ -164,7 +212,7 @@ Which are the TOP 3 cards I should use to get the longest time before I have to 
     );
 
   } catch (error) {
-    console.error('Error in recommend-card function:', error);
+    console.error('Error in recommend-card function:', error instanceof Error ? error.message : 'Unknown error');
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
