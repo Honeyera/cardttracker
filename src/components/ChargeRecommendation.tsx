@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { CreditCard } from '@/types/creditCard';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
-import { Sparkles, Loader2, Calendar, CreditCard as CreditCardIcon, AlertCircle } from 'lucide-react';
+import { Sparkles, Loader2, Calendar, CreditCard as CreditCardIcon, AlertCircle, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 
 interface ChargeRecommendationProps {
   cards: CreditCard[];
@@ -20,10 +21,15 @@ interface CardRecommendation {
   explanation: string;
 }
 
+type ResponseMode = 'recommendations' | 'freeform';
+
 export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
   const [loading, setLoading] = useState(false);
   const [recommendations, setRecommendations] = useState<CardRecommendation[]>([]);
+  const [freeformAnswer, setFreeformAnswer] = useState<string | null>(null);
+  const [responseMode, setResponseMode] = useState<ResponseMode | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [question, setQuestion] = useState('');
 
   const fetchRecommendations = async () => {
     if (cards.length === 0) return;
@@ -52,11 +58,64 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
       if (data.error) throw new Error(data.error);
 
       setRecommendations(data.recommendations || []);
+      setFreeformAnswer(null);
+      setResponseMode('recommendations');
     } catch (err) {
       console.error('Error getting recommendation:', err);
       setError(err instanceof Error ? err.message : 'Failed to get recommendation');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const askQuestion = async () => {
+    if (cards.length === 0 || !question.trim()) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('recommend-card', {
+        body: {
+          cards: cards.map(card => ({
+            name: card.name,
+            lastFiveDigits: card.lastFiveDigits,
+            closingDay: card.closingDay,
+            dueDay: card.dueDay,
+            currentBalance: card.currentBalance,
+            totalBalance: card.totalBalance,
+            creditLimit: card.creditLimit,
+            paymentStatus: card.paymentStatus,
+          })),
+          chargeAmount: 100,
+          userQuestion: question.trim(),
+        },
+      });
+
+      if (fnError) throw new Error(fnError.message);
+      if (data.error) throw new Error(data.error);
+
+      if (data.answer) {
+        setFreeformAnswer(data.answer);
+        setRecommendations([]);
+        setResponseMode('freeform');
+      } else {
+        setRecommendations(data.recommendations || []);
+        setFreeformAnswer(null);
+        setResponseMode('recommendations');
+      }
+    } catch (err) {
+      console.error('Error asking question:', err);
+      setError(err instanceof Error ? err.message : 'Failed to get answer');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      askQuestion();
     }
   };
 
@@ -87,9 +146,24 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
           </Button>
         </div>
 
-        <p className="text-sm text-muted-foreground mb-4">
-          Click to see which card gives you the longest time before payment is due.
-        </p>
+        <div className="flex gap-2 mb-4">
+          <Textarea
+            placeholder="Ask anything about your cards... e.g. 'Which card should I use for a $500 purchase?' or 'Which card has the most available credit?'"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="min-h-[60px] resize-none text-sm"
+            rows={2}
+          />
+          <Button
+            onClick={askQuestion}
+            disabled={loading || cards.length === 0 || !question.trim()}
+            size="sm"
+            className="self-end"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          </Button>
+        </div>
 
         {error && (
           <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 text-destructive">
@@ -98,7 +172,13 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
           </div>
         )}
 
-        {recommendations.length > 0 && (
+        {responseMode === 'freeform' && freeformAnswer && (
+          <div className="p-4 rounded-lg border border-primary/20 bg-primary/5">
+            <p className="text-sm text-card-foreground whitespace-pre-wrap">{freeformAnswer}</p>
+          </div>
+        )}
+
+        {responseMode === 'recommendations' && recommendations.length > 0 && (
           <div className="space-y-3">
             {recommendations.map((rec, index) => (
               <div 

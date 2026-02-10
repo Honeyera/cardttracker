@@ -19,7 +19,8 @@ const cardSchema = z.object({
     creditLimit: z.number().nonnegative().max(1000000000).optional(),
     paymentStatus: z.string().max(200).nullable().optional()
   })).min(1, "At least one card required").max(100, "Maximum 100 cards allowed"),
-  chargeAmount: z.number().positive("Charge amount must be positive").max(1000000000, "Charge amount too large")
+  chargeAmount: z.number().positive("Charge amount must be positive").max(1000000000, "Charge amount too large"),
+  userQuestion: z.string().max(1000).optional()
 });
 
 serve(async (req) => {
@@ -67,7 +68,8 @@ serve(async (req) => {
       );
     }
 
-    const { cards, chargeAmount } = validationResult.data;
+    const { cards, chargeAmount, userQuestion } = validationResult.data;
+    const isFreeformQuestion = !!userQuestion;
     
     console.log('Received request for card recommendation:', { cardCount: cards.length, chargeAmount });
 
@@ -95,7 +97,18 @@ serve(async (req) => {
       paymentStatus: card.paymentStatus || null,
     }));
 
-    const systemPrompt = `You are a financial advisor AI that helps users optimize their credit card usage. Your task is to recommend the TOP 3 credit cards to use for a purchase to maximize the time before payment is due.
+    const systemPrompt = isFreeformQuestion
+      ? `You are a helpful credit card financial advisor. The user has credit cards with the following details. Answer their question clearly and concisely based on the card data provided.
+
+Today's date is ${currentMonth} ${currentDay}, ${currentYear}.
+
+Key concepts:
+- The CLOSING DATE (statement date) is when the billing cycle ends
+- The DUE DATE is when payment for that statement is due
+- If you charge AFTER the closing date, the charge goes on the NEXT billing cycle
+
+Respond with a JSON object: { "answer": "your detailed answer here" }`
+      : `You are a financial advisor AI that helps users optimize their credit card usage. Your task is to recommend the TOP 3 credit cards to use for a purchase to maximize the time before payment is due.
 
 Key concepts:
 - The CLOSING DATE (statement date) is when the billing cycle ends and the statement is generated
@@ -120,31 +133,15 @@ Respond with a JSON object in this exact format:
       "nextClosingDate": "Month Day",
       "paymentDueDate": "Month Day", 
       "explanation": "1-2 sentence explanation of why this card ranks here"
-    },
-    {
-      "rank": 2,
-      "cardName": "card name",
-      "lastFiveDigits": "12345",
-      "daysUntilPayment": number,
-      "nextClosingDate": "Month Day",
-      "paymentDueDate": "Month Day", 
-      "explanation": "1-2 sentence explanation"
-    },
-    {
-      "rank": 3,
-      "cardName": "card name",
-      "lastFiveDigits": "12345",
-      "daysUntilPayment": number,
-      "nextClosingDate": "Month Day",
-      "paymentDueDate": "Month Day", 
-      "explanation": "1-2 sentence explanation"
     }
   ]
 }
 
 If there are fewer than 3 cards, include only as many as available. Make sure to include the exact lastFiveDigits from the card data provided.`;
 
-    const userPrompt = `I want to make a charge of $${chargeAmount.toLocaleString()}. 
+    const userPrompt = isFreeformQuestion
+      ? `Here are my credit cards:\n${JSON.stringify(cardInfo, null, 2)}\n\nMy question: ${userQuestion}`
+      : `I want to make a charge of $${chargeAmount.toLocaleString()}. 
 
 Here are my credit cards:
 ${JSON.stringify(cardInfo, null, 2)}
