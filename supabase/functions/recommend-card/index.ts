@@ -108,19 +108,23 @@ Key concepts:
 - If you charge AFTER the closing date, the charge goes on the NEXT billing cycle
 
 Respond with a JSON object: { "answer": "your detailed answer here" }`
-      : `You are a financial advisor AI that helps users optimize their credit card usage. Your task is to recommend the TOP 3 credit cards to use for a purchase to maximize the time before payment is due.
+    : `You are a financial advisor AI. Your task is to recommend the TOP 3 credit cards that have JUST PASSED their closing date, giving the user the longest possible time before payment is due.
+
+Today's date is ${currentMonth} ${currentDay}, ${currentYear}.
 
 Key concepts:
 - The CLOSING DATE (statement date) is when the billing cycle ends and the statement is generated
-- The DUE DATE is when payment for that statement is due (typically 21-25 days after closing)
-- If you charge AFTER the closing date, the charge goes on the NEXT billing cycle, giving you the longest time before payment
+- The DUE DATE is when payment for that statement is due
+- A charge made AFTER the closing date goes on the NEXT billing cycle
+- The best card to use is one whose closing date JUST PASSED (1-5 days ago ideally), because the charge won't appear on a statement until the NEXT closing date, and payment won't be due until the due date AFTER that
 
-Strategy for maximum payment deferral:
-1. Find cards where the closing date has JUST passed (you just missed it), meaning charges go to next cycle
-2. Calculate days until the NEXT closing date + days until due date after that
-3. Rank cards by combined days - highest is best
-
-Today's date is ${currentMonth} ${currentDay}, ${currentYear}.
+Calculation steps for each card:
+1. Determine when the closing date last occurred relative to today
+2. If today is AFTER the closing day this month, the charge goes on NEXT month's statement (next closing date is ~30 days away)
+3. If today is BEFORE the closing day this month, the charge goes on THIS month's statement (closing is coming soon - NOT ideal)
+4. Calculate "daysUntilPayment" = days from today until the payment due date for the billing cycle the charge will land on
+5. Cards where the closing date JUST PASSED get the highest daysUntilPayment and should rank first
+6. Rank all cards by daysUntilPayment descending - pick top 3
 
 Respond with a JSON object in this exact format:
 {
@@ -132,7 +136,7 @@ Respond with a JSON object in this exact format:
       "daysUntilPayment": number,
       "nextClosingDate": "Month Day",
       "paymentDueDate": "Month Day", 
-      "explanation": "1-2 sentence explanation of why this card ranks here"
+      "explanation": "1-2 sentence explanation. Mention how many days ago the closing date passed and why this maximizes deferral."
     }
   ]
 }
