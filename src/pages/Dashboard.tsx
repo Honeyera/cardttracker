@@ -41,6 +41,20 @@ function resolveDue(card: FinanceCard): { date: Date; days: number } | null {
   return { date, days: differenceInCalendarDays(date, today) };
 }
 
+function isSettled(card: FinanceCard): boolean {
+  return card.currentBalance <= 0.005
+    || (card.paymentStatus?.toLowerCase().includes('not required') ?? false)
+    || (card.paymentStatus?.toLowerCase().includes('no payment') ?? false);
+}
+
+// Lower rank = more urgent (sorts first). Overdue < due-soon (by days) < settled.
+function urgencyRank(card: FinanceCard): number {
+  if (card.isOverdue) return -100000;
+  if (isSettled(card)) return 100000;
+  const due = resolveDue(card);
+  return due ? due.days : 99999; // no due date → near the end, but before settled
+}
+
 const Dashboard = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
@@ -56,10 +70,12 @@ const Dashboard = () => {
     [cards],
   );
 
-  const visibleCards = useMemo(
-    () => (company === 'all' ? cards : cards.filter((c) => c.companyName === company)),
-    [cards, company],
-  );
+  const visibleCards = useMemo(() => {
+    const filtered = company === 'all' ? cards : cards.filter((c) => c.companyName === company);
+    // Sort by urgency: overdue first, then soonest due (with a balance owed),
+    // then cards that are paid / have nothing due.
+    return [...filtered].sort((a, b) => urgencyRank(a) - urgencyRank(b));
+  }, [cards, company]);
 
   const depository = useMemo(
     () => accounts.filter((a) => a.accountType === 'checking' || a.accountType === 'savings'),
@@ -334,14 +350,10 @@ function Flow({ label, value, icon: Icon, tone }: {
 
 function CardTile({ card }: { card: FinanceCard }) {
   const due = resolveDue(card);
-  const paidStatement =
-    card.currentBalance <= 0.005 ||
-    (card.paymentStatus?.toLowerCase().includes('not required') ?? false) ||
-    (card.paymentStatus?.toLowerCase().includes('no payment') ?? false);
 
   let status: { label: string; tone: Tone; icon: React.ComponentType<{ className?: string }> };
   if (card.isOverdue) status = { label: 'Overdue', tone: 'danger', icon: AlertTriangle };
-  else if (paidStatement) status = { label: 'Paid / none due', tone: 'success', icon: CheckCircle2 };
+  else if (isSettled(card)) status = { label: 'Paid / none due', tone: 'success', icon: CheckCircle2 };
   else if (due && due.days <= 3) status = { label: due.days <= 0 ? 'Due today' : `Due in ${due.days}d`, tone: 'danger', icon: AlertTriangle };
   else if (due && due.days <= 7) status = { label: `Due in ${due.days}d`, tone: 'warning', icon: CalendarClock };
   else status = { label: due ? `Due in ${due.days}d` : 'No due date', tone: 'muted', icon: CalendarClock };
