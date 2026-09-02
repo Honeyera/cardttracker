@@ -73,10 +73,10 @@ serve(async (req) => {
     
     console.log('Received request for card recommendation:', { cardCount: cards.length, chargeAmount });
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      console.error('LOVABLE_API_KEY is not configured');
-      throw new Error('LOVABLE_API_KEY is not configured');
+    const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+    if (!ANTHROPIC_API_KEY) {
+      console.error('ANTHROPIC_API_KEY is not configured');
+      throw new Error('ANTHROPIC_API_KEY is not configured');
     }
 
     // Get current date info
@@ -152,56 +152,70 @@ ${JSON.stringify(cardInfo, null, 2)}
 
 Which are the TOP 3 cards I should use to get the longest time before I have to make a payment? Rank them from best to worst. Consider that if I charge after a card's closing date, the charge goes on the next billing cycle.`;
 
-    console.log('Calling Lovable AI for recommendation...');
+    console.log('Calling Claude AI for recommendation...');
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4096,
+        system: systemPrompt,
         messages: [
-          { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        response_format: { type: 'json_object' },
       }),
     });
 
     if (!response.ok) {
-      console.error('AI gateway error:', response.status);
-      
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: 'Rate limit exceeded. Please try again in a moment.' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: 'AI credits exhausted. Please add funds to continue.' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      throw new Error(`AI gateway error: ${response.status}`);
+      const errorBody = await response.text();
+      console.error('Anthropic API error:', response.status, errorBody);
+
+      // Parse the Anthropic error to get a user-friendly message
+      let userMessage = `AI service error (${response.status}). Please try again later.`;
+      try {
+        const parsed = JSON.parse(errorBody);
+        const msg = parsed?.error?.message || '';
+        if (msg.toLowerCase().includes('credit balance') || msg.toLowerCase().includes('billing')) {
+          userMessage = 'AI credits exhausted. Please add credits at console.anthropic.com to continue.';
+        } else if (response.status === 429) {
+          userMessage = 'Rate limit exceeded. Please try again in a moment.';
+        } else if (msg) {
+          userMessage = msg;
+        }
+      } catch {}
+
+      return new Response(
+        JSON.stringify({ error: userMessage }),
+        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const aiResponse = await response.json();
-    console.log('AI response received');
+    console.log('AI response received, stop_reason:', aiResponse.stop_reason);
 
-    const content = aiResponse.choices?.[0]?.message?.content;
+    const content = aiResponse.content?.[0]?.text;
     if (!content) {
       throw new Error('No content in AI response');
     }
 
     let recommendation;
     try {
-      recommendation = JSON.parse(content);
+      // Strip markdown code blocks if present
+      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      let jsonStr = jsonMatch ? jsonMatch[1] : content;
+      // Also try extracting first JSON object if there's surrounding text
+      if (!jsonStr.trim().startsWith('{')) {
+        const objMatch = jsonStr.match(/\{[\s\S]*\}/);
+        if (objMatch) jsonStr = objMatch[0];
+      }
+      recommendation = JSON.parse(jsonStr.trim());
     } catch (e) {
-      console.error('Failed to parse AI response, length:', content?.length || 0);
+      console.error('Failed to parse AI response:', content.substring(0, 500));
       throw new Error('Failed to parse AI recommendation');
     }
 

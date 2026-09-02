@@ -16,13 +16,12 @@ const authSchema = z.object({
 });
 
 const Auth = () => {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
-  const { signIn, signUp, user, loading: authLoading } = useAuth();
+  const { signIn, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -45,30 +44,16 @@ const Auth = () => {
     setLoading(true);
     
     try {
-      if (isLogin) {
-        const { error } = await signIn(email, password);
-        if (error) {
-          if (error.message.includes('Invalid login credentials')) {
-            toast.error('Invalid email or password');
-          } else {
-            toast.error(error.message);
-          }
+      const { error } = await signIn(email, password);
+      if (error) {
+        if (error.message.includes('Invalid login credentials')) {
+          toast.error('Invalid email or password');
         } else {
-          toast.success('Welcome back!');
-          navigate('/');
+          toast.error(error.message);
         }
       } else {
-        const { error } = await signUp(email, password);
-        if (error) {
-          if (error.message.includes('already registered')) {
-            toast.error('This email is already registered. Try logging in instead.');
-          } else {
-            toast.error(error.message);
-          }
-        } else {
-          toast.success('Account created successfully!');
-          navigate('/');
-        }
+        toast.success('Welcome back!');
+        navigate('/');
       }
     } finally {
       setLoading(false);
@@ -92,7 +77,7 @@ const Auth = () => {
           </div>
           <CardTitle className="text-2xl">CardTrack</CardTitle>
           <CardDescription>
-            {isLogin ? 'Sign in to your account' : 'Create a new account'}
+            Sign in to your account
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -144,26 +129,16 @@ const Auth = () => {
                     <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10" required />
                   </div>
                 </div>
-                {isLogin && (
-                  <div className="text-right">
-                    <button type="button" onClick={() => setShowForgotPassword(true)} className="text-sm text-primary hover:underline">
-                      Forgot password?
-                    </button>
-                  </div>
-                )}
+                <div className="text-right">
+                  <button type="button" onClick={() => setShowForgotPassword(true)} className="text-sm text-primary hover:underline">
+                    Forgot password?
+                  </button>
+                </div>
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                  {isLogin ? 'Sign In' : 'Sign Up'}
+                  Sign In
                 </Button>
               </form>
-              <div className="mt-4 text-center text-sm">
-                <span className="text-muted-foreground">
-                  {isLogin ? "Don't have an account? " : 'Already have an account? '}
-                </span>
-                <button type="button" onClick={() => setIsLogin(!isLogin)} className="text-primary hover:underline font-medium">
-                  {isLogin ? 'Sign Up' : 'Sign In'}
-                </button>
-              </div>
             </>
           )}
         </CardContent>

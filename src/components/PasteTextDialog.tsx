@@ -18,14 +18,15 @@ interface PasteTextDialogProps {
   onOpenChange: (open: boolean) => void;
   existingCards: CreditCard[];
   onCardsFound: (newCards: Omit<CreditCard, 'id'>[]) => void;
-  onCardsUpdated: (updates: { id: string; currentBalance: number; totalBalance?: number; paymentStatus?: string }[]) => void;
+  onCardsUpdated: (updates: { id: string; currentBalance: number; totalBalance?: number; paymentStatus?: string | null }[]) => void;
 }
 
 interface MatchedCard {
   existingCard: CreditCard;
   newBalance: number;
   newTotalBalance?: number;
-  newPaymentStatus?: string;
+  // null means the text showed no payment-status, so clear any stored status.
+  newPaymentStatus?: string | null;
 }
 
 interface ParsedCard {
@@ -140,7 +141,9 @@ export function PasteTextDialog({
                 existingCard: existing,
                 newBalance: parsedCard.currentBalance,
                 newTotalBalance: parsedCard.totalBalance,
-                newPaymentStatus: parsedCard.paymentStatus,
+                // Fall back to null (not undefined) so updateCard actively clears
+                // a stale "Payment not required" when the new text omits it.
+                newPaymentStatus: parsedCard.paymentStatus ?? null,
               });
             } else {
               unchangedCardCount++;

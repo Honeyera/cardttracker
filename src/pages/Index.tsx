@@ -25,10 +25,13 @@ import { UpcomingDates } from '@/components/UpcomingDates';
 import { CreditCardTable } from '@/components/CreditCardTable';
 import { ChargeRecommendation } from '@/components/ChargeRecommendation';
 import { DashboardStats } from '@/components/DashboardStats';
-import { TeamManagement } from '@/components/TeamManagement';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, CreditCard, Wallet, Upload, LogOut, Loader2, Users, LayoutGrid, Table, ClipboardPaste } from 'lucide-react';
+import { Plus, CreditCard, Wallet, Upload, Loader2, LayoutGrid, Table, ClipboardPaste, Search, Building2, Trophy } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { UserMenu } from '@/components/UserMenu';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CreditCard as CreditCardType } from '@/types/creditCard';
 
 const Index = () => {
@@ -39,7 +42,21 @@ const Index = () => {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<CreditCardType | null>(null);
-  const [showTeamPanel, setShowTeamPanel] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCompany, setSelectedCompany] = useState<string>('all');
+
+  const companies = useMemo(() => {
+    const names = new Set<string>();
+    cards.forEach(card => {
+      if (card.companyName) names.add(card.companyName);
+    });
+    return Array.from(names).sort();
+  }, [cards]);
+
+  const companyFilteredCards = useMemo(() => {
+    if (selectedCompany === 'all') return cards;
+    return cards.filter(card => card.companyName === selectedCompany);
+  }, [cards, selectedCompany]);
 
   const pointerSensor = useSensor(PointerSensor, {
     activationConstraint: {
@@ -53,7 +70,19 @@ const Index = () => {
   
   const sensors = useSensors(pointerSensor, keyboardSensor);
   
-  const cardIds = useMemo(() => cards.map((card) => card.id), [cards]);
+  const filteredCards = useMemo(() => {
+    if (!searchQuery.trim()) return companyFilteredCards;
+    const q = searchQuery.toLowerCase();
+    return companyFilteredCards.filter(
+      (card) =>
+        card.lastFiveDigits.includes(q) ||
+        card.name.toLowerCase().includes(q) ||
+        card.ownerName?.toLowerCase().includes(q) ||
+        card.companyName?.toLowerCase().includes(q)
+    );
+  }, [companyFilteredCards, searchQuery]);
+
+  const cardIds = useMemo(() => filteredCards.map((card) => card.id), [filteredCards]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -77,7 +106,7 @@ const Index = () => {
     newCards.forEach((card) => addCard(card));
   };
 
-  const handleCardsUpdated = (updates: { id: string; currentBalance: number; totalBalance?: number; paymentStatus?: string }[]) => {
+  const handleCardsUpdated = (updates: { id: string; currentBalance: number; totalBalance?: number; paymentStatus?: string | null }[]) => {
     updates.forEach(({ id, currentBalance, totalBalance, paymentStatus }) => {
       updateCard(id, { currentBalance, totalBalance, paymentStatus });
     });
@@ -128,9 +157,11 @@ const Index = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button onClick={() => setShowTeamPanel(!showTeamPanel)} size="sm" variant="outline">
-              <Users className="w-4 h-4 mr-1" />
-              Team
+            <Button size="sm" variant="outline" asChild>
+              <Link to="/points">
+                <Trophy className="w-4 h-4 mr-1" />
+                Points
+              </Link>
             </Button>
             <Button onClick={() => setUploadDialogOpen(true)} size="sm" variant="outline">
               <Upload className="w-4 h-4 mr-1" />
@@ -144,31 +175,69 @@ const Index = () => {
               <Plus className="w-4 h-4 mr-1" />
               Add Card
             </Button>
-            <Button onClick={handleSignOut} size="sm" variant="ghost">
-              <LogOut className="w-4 h-4" />
-            </Button>
+            <UserMenu userEmail={user?.email || ''} onSignOut={handleSignOut} />
           </div>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-        {/* Team Management Panel */}
-        {showTeamPanel && <TeamManagement />}
+        {/* Company Filter */}
+        <div className="flex items-center gap-2">
+          <Building2 className="w-4 h-4 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Company:</span>
+          <Select value={selectedCompany} onValueChange={setSelectedCompany}>
+            <SelectTrigger className="w-[200px] h-9 text-sm">
+              <SelectValue placeholder="All Companies" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Companies</SelectItem>
+              {companies.map(company => (
+                <SelectItem key={company} value={company}>{company}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Active Company Banner */}
+        {selectedCompany !== 'all' && (
+          <div className="flex items-center justify-between bg-primary/10 border border-primary/20 rounded-xl px-5 py-3">
+            <div className="flex items-center gap-3">
+              <Building2 className="w-5 h-5 text-primary" />
+              <span className="text-lg font-bold text-primary">{selectedCompany}</span>
+              <span className="text-sm text-muted-foreground">
+                — {companyFilteredCards.length} {companyFilteredCards.length === 1 ? 'card' : 'cards'}
+              </span>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedCompany('all')} className="text-muted-foreground">
+              Show All
+            </Button>
+          </div>
+        )}
 
         {/* Dashboard Stats */}
-        <DashboardStats cards={cards} />
+        <DashboardStats cards={companyFilteredCards} />
 
         {/* Smart Charge Advisor */}
-        {cards.length > 0 && <ChargeRecommendation cards={cards} />}
+        {companyFilteredCards.length > 0 && <ChargeRecommendation cards={companyFilteredCards} />}
 
         {/* Cards Section with Tabs */}
         <Tabs defaultValue="cards" className="w-full">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
             <div className="flex items-center gap-2">
               <CreditCard className="w-5 h-5 text-primary" />
               <h2 className="text-lg font-semibold text-foreground">Your Cards</h2>
             </div>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by card # or name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 w-48 h-8 text-sm"
+                />
+              </div>
             <TabsList>
               <TabsTrigger value="cards" className="gap-1.5">
                 <LayoutGrid className="w-4 h-4" />
@@ -179,6 +248,7 @@ const Index = () => {
                 Table
               </TabsTrigger>
             </TabsList>
+            </div>
           </div>
 
           <TabsContent value="cards" className="mt-0">
@@ -186,23 +256,29 @@ const Index = () => {
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
-            ) : cards.length === 0 ? (
+            ) : filteredCards.length === 0 ? (
               <div className="bg-card rounded-2xl p-12 text-center border border-dashed border-border">
                 <CreditCard className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-foreground mb-2">
-                  No cards yet
-                </h3>
-                <p className="text-muted-foreground mb-4">
-                  Add your first credit card to start tracking dates
-                </p>
-                <Button onClick={() => setDialogOpen(true)}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Your First Card
-                </Button>
+                {searchQuery.trim() ? (
+                  <>
+                    <h3 className="text-lg font-medium text-foreground mb-2">No matching cards</h3>
+                    <p className="text-muted-foreground mb-4">No cards match "{searchQuery}"</p>
+                    <Button variant="outline" onClick={() => setSearchQuery('')}>Clear Search</Button>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-lg font-medium text-foreground mb-2">No cards yet</h3>
+                    <p className="text-muted-foreground mb-4">Add your first credit card to start tracking dates</p>
+                    <Button onClick={() => setDialogOpen(true)}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Your First Card
+                    </Button>
+                  </>
+                )}
               </div>
             ) : (
               <>
-                {cards.length > 1 && (
+                {filteredCards.length > 1 && (
                   <p className="text-xs text-muted-foreground mb-3">(drag to reorder)</p>
                 )}
                 <DndContext
@@ -215,7 +291,7 @@ const Index = () => {
                     strategy={rectSortingStrategy}
                   >
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {cards.map((card) => (
+                      {filteredCards.map((card) => (
                         <SortableCardItem
                           key={card.id}
                           card={card}
@@ -232,12 +308,12 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="table" className="mt-0">
-            <CreditCardTable cards={cards} onEdit={handleEdit} onUpdateBalance={handleBalanceUpdate} />
+            <CreditCardTable cards={filteredCards} onEdit={handleEdit} onUpdateBalance={handleBalanceUpdate} />
           </TabsContent>
         </Tabs>
 
         {/* Upcoming Dates Section */}
-        <UpcomingDates cards={cards} />
+        <UpcomingDates cards={companyFilteredCards} />
       </main>
 
       {/* Add/Edit Card Dialog */}

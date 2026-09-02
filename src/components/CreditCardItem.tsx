@@ -82,7 +82,7 @@ export function CreditCardItem({ card, onEdit, onDelete, onUpdateBalance }: Cred
           </div>
 
           {/* Available Credit */}
-          {card.creditLimit && card.creditLimit > 0 && (
+          {(card.creditLimit ?? 0) > 0 && (
             <div>
               <p className="text-xs opacity-70 mb-0.5">Available Credit</p>
               <p className="text-sm font-semibold">

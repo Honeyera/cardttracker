@@ -11,7 +11,8 @@ export interface CreditCard {
   currentBalance?: number; // Remaining statement balance
   totalBalance?: number; // Total balance on the card
   teamId?: string;
-  paymentStatus?: string; // e.g., "Payment not required at this time"
+  paymentStatus?: string | null; // e.g., "Payment not required at this time"; null clears it
+  updatedAt?: string;
 }
 
 export type CardColor = CreditCard['color'];

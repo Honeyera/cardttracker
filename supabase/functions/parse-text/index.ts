@@ -62,25 +62,14 @@ serve(async (req) => {
 
     const { text } = validationResult.data;
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!ANTHROPIC_API_KEY) {
+      throw new Error("ANTHROPIC_API_KEY is not configured");
     }
 
     console.log("Parsing text input, length:", text.length);
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert at parsing credit card information from copied text. The text may come from banking apps, statements, emails, or other sources.
+    const systemPrompt = `You are an expert at parsing credit card information from copied text. The text may come from banking apps, statements, emails, or other sources.
 
 CRITICAL - CARD NUMBER EXTRACTION:
 - Look for patterns like "ending in XXXXX", "...XXXXX", "****XXXXX", "x-XXXXX", "Account ending in", or partial card numbers
@@ -95,7 +84,7 @@ Extract credit card information from the text. For each card found, extract:
 - remainingStatementBalance: The STATEMENT BALANCE - the amount due from the billing cycle. Look for "Statement balance", "Amount due", "Minimum due". Extract NUMBER ONLY (e.g., 1234.56 not "$1,234.56").
 - totalBalance: The CURRENT/TOTAL BALANCE - the full amount owed. Look for "Current balance", "Total balance". Extract NUMBER ONLY.
 - creditLimit: The credit limit if visible (number only)
-- paymentStatus: If you see "Payment not required", "No payment due", "Paid in full", include the text. Otherwise null.
+- paymentStatus: ONLY set this if the text literally states no payment is currently required (e.g. the exact words "Payment not required at this time" or "You don't have a payment due right now"). Copy the exact text. Do NOT infer it from a $0 balance, a paid-off card, or autopay. If that explicit sentence is not present, this MUST be null.
 
 PARSING RULES:
 1. lastFiveDigits must ALWAYS be exactly 5 characters, as a STRING with quotes.
@@ -121,8 +110,20 @@ Return ONLY valid JSON in this exact format, no markdown:
 }
 
 If you cannot find any credit cards, return: {"cards": []}
-If a field is not visible, use reasonable defaults: closingDay=15, dueDay=22. For balances, only use 0 if you truly cannot find any balance information.`
-          },
+If a field is not visible, use reasonable defaults: closingDay=15, dueDay=22. For balances, only use 0 if you truly cannot find any balance information.`;
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [
           {
             role: "user",
             content: `Please parse the following text and extract all credit card information:\n\n${text}`
@@ -132,24 +133,30 @@ If a field is not visible, use reasonable defaults: closingDay=15, dueDay=22. Fo
     });
 
     if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please add more credits." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      console.error("AI gateway error:", response.status);
-      throw new Error(`AI gateway error: ${response.status}`);
+      const errorBody = await response.text();
+      console.error("Anthropic API error:", response.status, errorBody);
+
+      let userMessage = `AI service error (${response.status}). Please try again later.`;
+      try {
+        const parsed = JSON.parse(errorBody);
+        const msg = parsed?.error?.message || '';
+        if (msg.toLowerCase().includes('credit balance') || msg.toLowerCase().includes('billing')) {
+          userMessage = 'AI credits exhausted. Please add credits at console.anthropic.com to continue.';
+        } else if (response.status === 429) {
+          userMessage = 'Rate limit exceeded. Please try again in a moment.';
+        } else if (msg) {
+          userMessage = msg;
+        }
+      } catch {}
+
+      return new Response(
+        JSON.stringify({ error: userMessage }),
+        { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
+    const content = data.content?.[0]?.text;
 
     console.log("AI response received, length:", content?.length || 0);
 

@@ -7,7 +7,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Input validation schema
 const imageSchema = z.object({
   imageBase64: z.string()
     .min(100, "Image data too small")
@@ -23,7 +22,6 @@ serve(async (req) => {
   }
 
   try {
-    // Authentication check
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
@@ -48,16 +46,12 @@ serve(async (req) => {
       );
     }
 
-    // Parse and validate input
     const requestData = await req.json();
     const validationResult = imageSchema.safeParse(requestData);
-    
+
     if (!validationResult.success) {
       return new Response(
-        JSON.stringify({ 
-          error: "Invalid input", 
-          details: validationResult.error.errors 
-        }),
+        JSON.stringify({ error: "Invalid input", details: validationResult.error.errors }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -69,36 +63,26 @@ serve(async (req) => {
       throw new Error("ANTHROPIC_API_KEY is not configured");
     }
 
-    const systemPrompt = `You are an expert at analyzing credit card screenshots from banking apps and statements.
+    const systemPrompt = `You are an expert at analyzing screenshots from banking apps, credit card portals, and rewards program pages.
 
-CRITICAL - CARD NUMBER EXTRACTION:
-- Look for text patterns like "ending in XXXXX", "...XXXXX", "****XXXXX", "x-XXXXX", or a masked card number showing the last digits
-- The card number is usually displayed near the card name or at the top of the card details
-- In Chase app: look for "Account ending in" followed by digits
-- Extract EXACTLY the digits shown - do not guess or infer digits
-- lastFiveDigits: MUST be exactly 5 characters as a STRING (e.g., "01012", "91012"). Preserve leading zeros!
+Your task is to extract credit card reward POINTS balances (not dollar amounts) from the image.
 
-Extract credit card information from the image. For each card found, extract:
-- name: The card name/type (e.g., "Chase Sapphire", "Amex Gold", "Chase Freedom")
-- lastFiveDigits: EXACTLY the last 5 digits as shown after "ending in" or similar text. This MUST be a 5-character STRING, preserving any leading zeros. If fewer than 5 digits are visible, pad with zeros on the left. If no digits visible, use "00000".
-- closingDay: The statement closing day of the month (1-31)
-- dueDay: The payment due day of the month (1-31)
-- remainingStatementBalance: The STATEMENT BALANCE or REMAINING STATEMENT BALANCE - the amount due from the last billing cycle. Look for labels like "Statement balance", "Last statement balance", "Remaining statement balance", "Amount due", "Minimum due". This is the amount the user needs to pay. Extract the NUMBER ONLY without $ or commas (e.g., 1234.56 not "$1,234.56").
-- totalBalance: The CURRENT/TOTAL BALANCE - the full amount currently owed including recent transactions. Look for labels like "Current balance", "Total balance", "Balance". This is usually the larger number. Extract the NUMBER ONLY without $ or commas.
-- creditLimit: The credit limit if visible (number only, no currency symbol)
-- paymentStatus: ONLY set this if the screenshot LITERALLY DISPLAYS text stating no payment is currently required — for example the exact words "Payment not required at this time" or "You don't have a payment due right now". Copy the exact text you see. Do NOT infer this from a $0 balance, a paid-off card, a $0 minimum payment, autopay being enabled, or any other indirect signal. If that explicit sentence is not actually visible as text in the image, this MUST be null. A $0 balance alone is NOT a payment status.
+WHAT TO LOOK FOR:
+- Reward points, miles, cash back points, loyalty points
+- Labels like: "Points", "Miles", "Rewards", "Available points", "Points balance", "Ultimate Rewards", "Membership Rewards", "ThankYou Points", "Cash Back", "Available miles"
+- The points value is usually a large number with commas (e.g., 45,231 or 1,234,500)
 
-CHASE APP SPECIFIC: In Chase app screenshots:
-- "Current balance" = totalBalance (the full amount owed now)
-- "Statement balance" or "Last statement balance" = remainingStatementBalance (what's due from billing cycle)
-- Look for both values - they are usually displayed prominently
+CARD IDENTIFICATION:
+- Look for card names like "Chase Sapphire Reserve", "Amex Gold", "Freedom Unlimited", etc.
+- Look for masked card numbers showing last digits: "ending in XXXXX", "****XXXXX", "...XXXXX"
+- lastFiveDigits: MUST be exactly 5 characters as a STRING, preserving leading zeros. Use "00000" if not visible.
 
-CRITICAL RULES:
-1. lastFiveDigits must ALWAYS be exactly 5 characters, as a STRING with quotes. Never return it as a number.
-2. ALL balance values must be NUMBERS, not strings. Remove $ signs and commas before returning.
-3. If you see "$1,234.56", return 1234.56 as the number.
-4. BOTH remainingStatementBalance AND totalBalance should be extracted if visible - they are different values!
-5. ZERO IS A VALID VALUE. If the screenshot clearly shows "$0", "$0.00", "Statement balance: $0", "Current balance: $0", or "Balance: $0", return 0 for that field. A paid-off card legitimately has a $0 balance — do NOT skip it, do NOT substitute a different number, and do NOT return null in that case. Only use null when the field is genuinely not visible in the screenshot.
+IMPORTANT RULES:
+1. Extract POINTS (integer numbers like 45231) not dollar amounts.
+2. Remove any commas from point values — return as a plain integer (e.g., 45231 not "45,231").
+3. lastFiveDigits must ALWAYS be exactly 5 characters as a STRING.
+4. If you see both a "total" and "available" points value, use the AVAILABLE points (what can be redeemed now).
+5. Do NOT confuse dollar amounts with points. Points are usually whole numbers in the thousands.
 
 Return ONLY valid JSON in this exact format, no markdown:
 {
@@ -106,18 +90,13 @@ Return ONLY valid JSON in this exact format, no markdown:
     {
       "name": "Card Name",
       "lastFiveDigits": "12345",
-      "closingDay": 15,
-      "dueDay": 22,
-      "remainingStatementBalance": 500.00,
-      "totalBalance": 1234.56,
-      "creditLimit": 10000,
-      "paymentStatus": null
+      "availablePoints": 45231
     }
   ]
 }
 
-If you cannot find any credit cards, return: {"cards": []}
-If a field is not visible, use reasonable defaults: closingDay=15, dueDay=22. For balance fields that are not visible at all, use null. If a balance is visibly shown as $0, return 0 (not null, not a guessed value).`;
+If you cannot find any reward points information, return: {"cards": []}
+If a field is not visible, use "00000" for lastFiveDigits and 0 for availablePoints.`;
 
     const imageUrl = imageBase64.startsWith("data:") ? imageBase64 : `data:image/png;base64,${imageBase64}`;
     const mediaType = imageUrl.match(/^data:(image\/[^;]+)/)?.[1] || "image/png";
@@ -148,7 +127,7 @@ If a field is not visible, use reasonable defaults: closingDay=15, dueDay=22. Fo
               },
               {
                 type: "text",
-                text: "Please analyze this screenshot and extract all credit card information you can find."
+                text: "Please analyze this screenshot and extract all reward points balances you can find."
               }
             ]
           }
@@ -182,31 +161,25 @@ If a field is not visible, use reasonable defaults: closingDay=15, dueDay=22. Fo
     const data = await response.json();
     const content = data.content?.[0]?.text;
 
-    console.log("AI response received, length:", content?.length || 0);
-
     if (!content) {
       throw new Error("No content in AI response");
     }
 
-    // Parse the JSON from the response
-    let parsedCards;
+    let parsedResult;
     try {
-      // Try to extract JSON if wrapped in markdown code blocks
       const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
       const jsonStr = jsonMatch ? jsonMatch[1] : content;
-      parsedCards = JSON.parse(jsonStr.trim());
-      console.log("Parsed cards count:", parsedCards?.cards?.length || 0);
+      parsedResult = JSON.parse(jsonStr.trim());
     } catch (e) {
-      console.error("Failed to parse AI response, length:", content?.length || 0);
-      throw new Error("Failed to parse card data from image");
+      throw new Error("Failed to parse points data from image");
     }
 
     return new Response(
-      JSON.stringify(parsedCards),
+      JSON.stringify(parsedResult),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Error analyzing screenshot:", error instanceof Error ? error.message : "Unknown error");
+    console.error("Error analyzing points screenshot:", error instanceof Error ? error.message : "Unknown error");
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

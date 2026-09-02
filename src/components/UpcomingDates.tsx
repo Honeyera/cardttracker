@@ -156,7 +156,7 @@ export function UpcomingDates({ cards }: UpcomingDatesProps) {
                         closingUrgency === 'normal' && 'text-card-foreground'
                       )}
                     >
-                      {formatDate(event.closingDate).slice(0, -6)}
+                      {formatDate(event.closingDate)}
                     </p>
                   </div>
 
@@ -171,7 +171,7 @@ export function UpcomingDates({ cards }: UpcomingDatesProps) {
                         dueUrgency === 'normal' && 'text-card-foreground'
                       )}
                     >
-                      {formatDate(event.dueDate).slice(0, -6)}
+                      {formatDate(event.dueDate)}
                     </p>
                   </div>
                 </div>

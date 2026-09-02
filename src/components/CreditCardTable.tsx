@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { LayoutList, CheckCircle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { EditableBalance } from '@/components/EditableBalance';
 
-type SortField = 'name' | 'owner' | 'company' | 'currentBalance' | 'totalBalance' | 'closing' | 'due';
+type SortField = 'name' | 'owner' | 'company' | 'currentBalance' | 'totalBalance' | 'closing' | 'due' | 'updated';
 type SortDirection = 'asc' | 'desc';
 
 interface CreditCardTableProps {
@@ -55,6 +55,9 @@ export function CreditCardTable({ cards, onEdit, onUpdateBalance }: CreditCardTa
           break;
         case 'due':
           comparison = getDaysUntil(a.dueDay) - getDaysUntil(b.dueDay);
+          break;
+        case 'updated':
+          comparison = (a.updatedAt || '').localeCompare(b.updatedAt || '');
           break;
       }
 
@@ -106,6 +109,7 @@ export function CreditCardTable({ cards, onEdit, onUpdateBalance }: CreditCardTa
               <SortableHeader field="totalBalance" className="text-right">Total Balance</SortableHeader>
               <SortableHeader field="closing" className="text-center">Closing</SortableHeader>
               <SortableHeader field="due" className="text-center">Due</SortableHeader>
+              <SortableHeader field="updated" className="text-center">Last Updated</SortableHeader>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -253,6 +257,17 @@ export function CreditCardTable({ cards, onEdit, onUpdateBalance }: CreditCardTa
                         {daysUntilDue === 0 ? 'Today!' : `${daysUntilDue} days`}
                       </p>
                     </div>
+                  </TableCell>
+
+                  {/* Last Updated */}
+                  <TableCell className="text-center">
+                    {card.updatedAt ? (
+                      <span className="text-sm text-muted-foreground">
+                        {new Date(card.updatedAt).toLocaleDateString()}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground/50">—</span>
+                    )}
                   </TableCell>
                 </TableRow>
               );

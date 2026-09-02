@@ -49,6 +49,7 @@ export function AddCardDialog({
   const [color, setColor] = useState<CardColor>('navy');
   const [creditLimit, setCreditLimit] = useState('');
   const [currentBalance, setCurrentBalance] = useState('');
+  const [totalBalance, setTotalBalance] = useState('');
 
   useEffect(() => {
     if (editCard) {
@@ -61,6 +62,7 @@ export function AddCardDialog({
       setColor(editCard.color);
       setCreditLimit(editCard.creditLimit?.toString() || '');
       setCurrentBalance(editCard.currentBalance?.toString() || '');
+      setTotalBalance(editCard.totalBalance?.toString() || '');
     } else {
       resetForm();
     }
@@ -76,6 +78,7 @@ export function AddCardDialog({
     setColor('navy');
     setCreditLimit('');
     setCurrentBalance('');
+    setTotalBalance('');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -89,8 +92,9 @@ export function AddCardDialog({
       closingDay: parseInt(closingDay),
       dueDay: parseInt(dueDay),
       color,
-      creditLimit: creditLimit ? parseFloat(creditLimit) : undefined,
-      currentBalance: currentBalance ? parseFloat(currentBalance) : undefined,
+      creditLimit: creditLimit !== '' ? parseFloat(creditLimit) : undefined,
+      currentBalance: currentBalance !== '' ? parseFloat(currentBalance) : undefined,
+      totalBalance: totalBalance !== '' ? parseFloat(totalBalance) : undefined,
     };
 
     if (editCard && onUpdate) {
@@ -202,7 +206,7 @@ export function AddCardDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="balance">Current Balance</Label>
+              <Label htmlFor="balance">Statement Balance</Label>
               <Input
                 id="balance"
                 type="number"
@@ -213,13 +217,14 @@ export function AddCardDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="limit">Credit Limit</Label>
+              <Label htmlFor="totalBalance">Total Balance</Label>
               <Input
-                id="limit"
+                id="totalBalance"
                 type="number"
-                placeholder="10000"
-                value={creditLimit}
-                onChange={(e) => setCreditLimit(e.target.value)}
+                step="0.01"
+                placeholder="0.00"
+                value={totalBalance}
+                onChange={(e) => setTotalBalance(e.target.value)}
               />
             </div>
           </div>

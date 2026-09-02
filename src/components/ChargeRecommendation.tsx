@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { CreditCard } from '@/types/creditCard';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
-import { Sparkles, Loader2, Calendar, CreditCard as CreditCardIcon, AlertCircle, Send } from 'lucide-react';
+import { Sparkles, Loader2, Calendar, CreditCard as CreditCardIcon, AlertCircle, Send, Building2, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface ChargeRecommendationProps {
   cards: CreditCard[];
@@ -30,9 +31,23 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
   const [responseMode, setResponseMode] = useState<ResponseMode | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [question, setQuestion] = useState('');
+  const [selectedIssuer, setSelectedIssuer] = useState<string>('all');
+
+  const issuers = useMemo(() => {
+    const names = new Set<string>();
+    cards.forEach(card => {
+      if (card.companyName) names.add(card.companyName);
+    });
+    return Array.from(names).sort();
+  }, [cards]);
+
+  const filteredCards = useMemo(() => {
+    if (selectedIssuer === 'all') return cards;
+    return cards.filter(card => card.companyName === selectedIssuer);
+  }, [cards, selectedIssuer]);
 
   const fetchRecommendations = async () => {
-    if (cards.length === 0) return;
+    if (filteredCards.length === 0) return;
 
     setLoading(true);
     setError(null);
@@ -40,7 +55,7 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
     try {
       const { data, error: fnError } = await supabase.functions.invoke('recommend-card', {
         body: {
-          cards: cards.map(card => ({
+          cards: filteredCards.map(card => ({
             name: card.name,
             lastFiveDigits: card.lastFiveDigits,
             closingDay: card.closingDay,
@@ -54,7 +69,11 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
         },
       });
 
-      if (fnError) throw new Error(fnError.message);
+      if (fnError) {
+        let detail = fnError.message;
+        try { const body = await fnError.context?.json(); detail = body?.error || detail; } catch {}
+        throw new Error(detail);
+      }
       if (data.error) throw new Error(data.error);
 
       setRecommendations(data.recommendations || []);
@@ -69,7 +88,7 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
   };
 
   const askQuestion = async () => {
-    if (cards.length === 0 || !question.trim()) return;
+    if (filteredCards.length === 0 || !question.trim()) return;
 
     setLoading(true);
     setError(null);
@@ -92,7 +111,11 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
         },
       });
 
-      if (fnError) throw new Error(fnError.message);
+      if (fnError) {
+        let detail = fnError.message;
+        try { const body = await fnError.context?.json(); detail = body?.error || detail; } catch {}
+        throw new Error(detail);
+      }
       if (data.error) throw new Error(data.error);
 
       if (data.answer) {
@@ -127,23 +150,38 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
             <Sparkles className="w-5 h-5 text-primary" />
             <h2 className="text-lg font-semibold text-card-foreground">Smart Charge Advisor</h2>
           </div>
-          <Button 
-            onClick={fetchRecommendations} 
-            disabled={loading || cards.length === 0}
-            size="sm"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Analyzing...
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4 mr-2" />
-                Get Recommendation
-              </>
+          <div className="flex items-center gap-2">
+            {issuers.length > 0 && (
+              <Select value={selectedIssuer} onValueChange={setSelectedIssuer}>
+                <SelectTrigger className="w-[160px] h-9 text-sm">
+                  <SelectValue placeholder="All Issuers" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Issuers</SelectItem>
+                  {issuers.map(issuer => (
+                    <SelectItem key={issuer} value={issuer}>{issuer}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
-          </Button>
+            <Button
+              onClick={fetchRecommendations}
+              disabled={loading || filteredCards.length === 0}
+              size="sm"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Get Recommendation
+                </>
+              )}
+            </Button>
+          </div>
         </div>
 
         <div className="flex gap-2 mb-4">
@@ -157,7 +195,7 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
           />
           <Button
             onClick={askQuestion}
-            disabled={loading || cards.length === 0 || !question.trim()}
+            disabled={loading || filteredCards.length === 0 || !question.trim()}
             size="sm"
             className="self-end"
           >
@@ -180,21 +218,23 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
 
         {responseMode === 'recommendations' && recommendations.length > 0 && (
           <div className="space-y-3">
-            {recommendations.map((rec, index) => (
-              <div 
-                key={rec.rank} 
+            {recommendations.map((rec, index) => {
+              const matchedCard = cards.find(c => c.lastFiveDigits === rec.lastFiveDigits);
+              return (
+              <div
+                key={rec.rank}
                 className={cn(
                   "p-4 rounded-lg border space-y-3",
-                  index === 0 
-                    ? "bg-primary/5 border-primary/20" 
+                  index === 0
+                    ? "bg-primary/5 border-primary/20"
                     : "bg-muted/30 border-border"
                 )}
               >
                 <div className="flex items-center gap-3">
                   <div className={cn(
                     "w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm",
-                    index === 0 
-                      ? "bg-primary text-primary-foreground" 
+                    index === 0
+                      ? "bg-primary text-primary-foreground"
                       : "bg-muted text-muted-foreground"
                   )}>
                     #{rec.rank}
@@ -202,11 +242,25 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
                   <div className="flex-1">
                     <p className="font-semibold text-card-foreground">{rec.cardName}</p>
                     <p className="text-xs text-muted-foreground font-mono">•••• {rec.lastFiveDigits || '•••••'}</p>
+                    <div className="flex items-center gap-3 mt-1">
+                      {matchedCard?.companyName && (
+                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                          <Building2 className="w-3 h-3" />
+                          {matchedCard.companyName}
+                        </span>
+                      )}
+                      {matchedCard?.ownerName && (
+                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                          <User className="w-3 h-3" />
+                          {matchedCard.ownerName}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className={cn(
                     "px-3 py-1 rounded-full text-sm font-semibold",
-                    rec.daysUntilPayment > 45 ? "bg-emerald-100 text-emerald-700" : 
-                    rec.daysUntilPayment > 30 ? "bg-amber-100 text-amber-700" : 
+                    rec.daysUntilPayment > 45 ? "bg-emerald-100 text-emerald-700" :
+                    rec.daysUntilPayment > 30 ? "bg-amber-100 text-amber-700" :
                     "bg-red-100 text-red-700"
                   )}>
                     {rec.daysUntilPayment} days
@@ -228,7 +282,8 @@ export function ChargeRecommendation({ cards }: ChargeRecommendationProps) {
 
                 <p className="text-sm text-muted-foreground">{rec.explanation}</p>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </CardContent>

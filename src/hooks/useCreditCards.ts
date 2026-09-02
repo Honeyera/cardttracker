@@ -3,7 +3,6 @@ import { CreditCard } from '@/types/creditCard';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { useTeam } from '@/hooks/useTeam';
 
 const LEGACY_STORAGE_KEY = 'credit-cards';
 const MIGRATED_FLAG_PREFIX = 'credit-cards-migrated:';
@@ -24,6 +23,7 @@ type DbCard = {
   created_at: string;
   team_id: string | null;
   payment_status: string | null;
+  updated_at: string | null;
 };
 
 function dbToModel(card: DbCard): CreditCard {
@@ -41,6 +41,7 @@ function dbToModel(card: DbCard): CreditCard {
     totalBalance: Number(card.total_balance) || 0,
     teamId: card.team_id ?? undefined,
     paymentStatus: card.payment_status ?? undefined,
+    updatedAt: card.updated_at ?? undefined,
   };
 }
 
@@ -59,7 +60,6 @@ function getDbCardKey(card: DbCard) {
 export function useCreditCards() {
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentTeamId, setCurrentTeamId] = useState<string | null>(null);
   const { user } = useAuth();
 
   const migratedFlagKey = useMemo(
@@ -70,7 +70,6 @@ export function useCreditCards() {
   useEffect(() => {
     if (!user) {
       setCards([]);
-      setCurrentTeamId(null);
       setLoading(false);
       return;
     }
@@ -78,20 +77,7 @@ export function useCreditCards() {
     const loadAndMaybeMigrate = async () => {
       setLoading(true);
 
-      // First, get user's team membership
-      const { data: membershipData } = await supabase
-        .from('team_members')
-        .select('team_id')
-        .eq('user_id', user.id)
-        .limit(1)
-        .maybeSingle();
-
-      if (membershipData?.team_id) {
-        setCurrentTeamId(membershipData.team_id);
-      }
-
       // Fetch current cards from database, ordered by display_order
-      // RLS will automatically filter to user's own cards + team cards
       const { data, error } = await supabase
         .from('credit_cards')
         .select('*')
@@ -195,7 +181,6 @@ export function useCreditCards() {
         credit_limit: card.creditLimit || 0,
         current_balance: card.currentBalance || 0,
         display_order: maxOrder + 1,
-        team_id: currentTeamId, // Associate with user's team if they have one
       })
       .select()
       .single();
@@ -228,13 +213,18 @@ export function useCreditCards() {
     if (updates.totalBalance !== undefined) dbUpdates.total_balance = updates.totalBalance;
     if (updates.paymentStatus !== undefined) dbUpdates.payment_status = updates.paymentStatus;
 
-    const { error } = await supabase.from('credit_cards').update(dbUpdates).eq('id', id);
+    const { data, error } = await supabase
+      .from('credit_cards')
+      .update(dbUpdates)
+      .eq('id', id)
+      .select()
+      .single();
 
     if (error) {
       console.error('Error updating card:', error);
       toast.error('Failed to update card');
-    } else {
-      setCards((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
+    } else if (data) {
+      setCards((prev) => prev.map((c) => (c.id === id ? dbToModel(data as unknown as DbCard) : c)));
     }
   };
 
