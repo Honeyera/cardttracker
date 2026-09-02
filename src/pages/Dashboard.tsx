@@ -30,23 +30,45 @@ const fmtDate = (iso: string | null) => {
   try { return format(parseISO(iso), 'MMM d, yyyy'); } catch { return iso; }
 };
 
-// Resolve a card's next due date: prefer the synced explicit date, else derive
-// from the day-of-month. Returns { date, days } or null if nothing to go on.
+// Resolve a card's next due date. Prefer the synced explicit date, but only if
+// it is today or in the future — a stale past date (common right after a
+// statement is paid) is rolled forward to the next occurrence of the due day so
+// we never render a past date as "due today". Returns { date, days } or null.
 function resolveDue(card: FinanceCard): { date: Date; days: number } | null {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
   let date: Date | null = null;
   if (card.nextPaymentDueDate) {
-    try { date = parseISO(card.nextPaymentDueDate); } catch { date = null; }
+    try {
+      const explicit = parseISO(card.nextPaymentDueDate);
+      if (explicit >= today) date = explicit;
+    } catch { /* ignore */ }
   }
   if (!date && card.dueDay) date = getNextOccurrence(card.dueDay);
+  // Last resort: a past explicit date (keeps overdue cards visible).
+  if (!date && card.nextPaymentDueDate) {
+    try { date = parseISO(card.nextPaymentDueDate); } catch { /* ignore */ }
+  }
   if (!date) return null;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
   return { date, days: differenceInCalendarDays(date, today) };
 }
 
+// A card has nothing due when the sync says so (payment_status / zero minimum)
+// or the statement balance is cleared — even if a running balance remains.
 function isSettled(card: FinanceCard): boolean {
-  return card.currentBalance <= 0.005
-    || (card.paymentStatus?.toLowerCase().includes('not required') ?? false)
-    || (card.paymentStatus?.toLowerCase().includes('no payment') ?? false);
+  if (card.isOverdue) return false;
+  const s = (card.paymentStatus ?? '').toLowerCase().replace(/[‘’′]/g, "'");
+  if (
+    s.includes('not required') ||
+    s.includes('no payment') ||
+    s.includes("don't have a payment") ||
+    s.includes('no amount due') ||
+    s.includes('nothing due') ||
+    s.includes('paid in full')
+  ) return true;
+  if (card.currentBalance <= 0.005) return true;
+  // No statement/minimum owed and no upcoming explicit due amount → nothing due.
+  if ((card.minimumPayment ?? 0) <= 0.005 && (card.lastStatementBalance ?? 0) <= 0.005) return true;
+  return false;
 }
 
 // Lower rank = more urgent (sorts first). Overdue < due-soon (by days) < settled.
@@ -96,7 +118,7 @@ const Dashboard = () => {
   const dueSoon = useMemo(() => {
     return visibleCards
       .map((c) => ({ card: c, due: resolveDue(c) }))
-      .filter((x) => x.due && x.due.days <= 7 && x.card.currentBalance > 0.005)
+      .filter((x) => x.due && x.due.days >= 0 && x.due.days <= 7 && !isSettled(x.card))
       .sort((a, b) => (a.due!.days - b.due!.days));
   }, [visibleCards]);
   const dueSoonTotal = dueSoon.reduce((s, x) => s + x.card.currentBalance, 0);
