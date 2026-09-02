@@ -171,7 +171,22 @@ const Dashboard = () => {
                    sub={dueSoon.length ? `${dueSoon.length} ${dueSoon.length === 1 ? 'card' : 'cards'} due` : 'nothing due'} />
             </div>
 
-            {/* Card tiles — primary content */}
+            {/* Bank accounts — prominent, on top */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <SectionTitle icon={Landmark}>Bank Accounts</SectionTitle>
+                <span className="text-sm font-semibold text-success">{fmtMoney(availableCash, { cents: true })} total</span>
+              </div>
+              {depository.length === 0 ? (
+                <div className="bg-card rounded-2xl border border-border p-5"><Empty>No bank accounts synced yet.</Empty></div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {depository.map((a) => <AccountTile key={a.id} account={a} />)}
+                </div>
+              )}
+            </div>
+
+            {/* Card tiles */}
             <div>
               <div className="flex items-center justify-between mb-3">
                 <SectionTitle icon={CardIcon}>Your Cards</SectionTitle>
@@ -188,30 +203,18 @@ const Dashboard = () => {
               )}
             </div>
 
-            {/* Cash accounts + activity summary */}
-            <div className="grid gap-4 lg:grid-cols-3">
-              <div className="lg:col-span-2 bg-card rounded-2xl border border-border p-5">
-                <SectionTitle icon={Landmark}>Bank Accounts</SectionTitle>
-                {depository.length === 0 ? (
-                  <Empty>No bank accounts synced yet.</Empty>
-                ) : (
-                  <div className="space-y-2 mt-3">
-                    {depository.map((a) => <AccountRow key={a.id} account={a} />)}
-                  </div>
-                )}
-              </div>
-              <div className="bg-card rounded-2xl border border-border p-5">
-                <SectionTitle icon={TrendingUp}>Activity</SectionTitle>
-                <div className="space-y-3 mt-3">
-                  <Flow label="Income" value={income} icon={ArrowDownRight} tone="success" />
-                  <Flow label="Spending" value={spend} icon={ArrowUpRight} tone="warning" />
-                  <Flow label="Card Payments" value={paymentsTotal} icon={CardIcon} tone="muted" />
-                  <div className="pt-3 border-t border-border flex items-center justify-between">
-                    <span className="text-sm font-medium">Net (income − spend)</span>
-                    <span className={cn('text-sm font-bold', income - spend >= 0 ? 'text-success' : 'text-destructive')}>
-                      {fmtMoney(income - spend, { cents: true })}
-                    </span>
-                  </div>
+            {/* Activity summary */}
+            <div className="bg-card rounded-2xl border border-border p-5">
+              <SectionTitle icon={TrendingUp}>Activity</SectionTitle>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mt-3">
+                <Flow label="Income" value={income} icon={ArrowDownRight} tone="success" />
+                <Flow label="Spending" value={spend} icon={ArrowUpRight} tone="warning" />
+                <Flow label="Card Payments" value={paymentsTotal} icon={CardIcon} tone="muted" />
+                <div className="flex items-center justify-between sm:justify-end sm:gap-2">
+                  <span className="text-sm font-medium">Net</span>
+                  <span className={cn('text-sm font-bold', income - spend >= 0 ? 'text-success' : 'text-destructive')}>
+                    {fmtMoney(income - spend, { cents: true })}
+                  </span>
                 </div>
               </div>
             </div>
@@ -292,28 +295,26 @@ const Empty = ({ children }: { children: React.ReactNode }) => (
   <p className="text-sm text-muted-foreground py-6 text-center">{children}</p>
 );
 
-function AccountRow({ account }: { account: FinanceAccount }) {
+function AccountTile({ account }: { account: FinanceAccount }) {
   return (
-    <div className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/50">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-          <Landmark className="w-4 h-4" />
+    <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+          <Landmark className="w-5 h-5" />
         </div>
         <div className="min-w-0">
-          <p className="font-medium truncate">{account.name}</p>
+          <p className="font-semibold truncate">{account.name}</p>
           <p className="text-xs text-muted-foreground truncate">
             {account.institution ?? 'Bank'}
-            {account.lastFour ? ` ••${account.lastFour}` : ''}
+            {account.lastFour ? ` •••• ${account.lastFour}` : ''}
             {' · '}{account.accountType}
           </p>
         </div>
       </div>
-      <div className="text-right shrink-0">
-        <p className="font-semibold">{fmtMoney(account.currentBalance, { cents: true })}</p>
-        {account.availableBalance !== account.currentBalance && (
-          <p className="text-xs text-muted-foreground">{fmtMoney(account.availableBalance)} avail</p>
-        )}
-      </div>
+      <p className="text-3xl font-bold text-card-foreground">{fmtMoney(account.currentBalance, { cents: true })}</p>
+      {account.availableBalance !== account.currentBalance && (
+        <p className="text-xs text-muted-foreground mt-1">{fmtMoney(account.availableBalance, { cents: true })} available</p>
+      )}
     </div>
   );
 }
