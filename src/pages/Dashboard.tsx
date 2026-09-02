@@ -4,6 +4,7 @@ import { format, parseISO, differenceInCalendarDays } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFinanceData, FinanceAccount, FinanceCard, FinanceTransaction } from '@/hooks/useFinanceData';
 import { getNextOccurrence } from '@/utils/dateUtils';
+import { cardColorClasses, CardColor } from '@/types/creditCard';
 import { UserMenu } from '@/components/UserMenu';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -170,6 +171,23 @@ const Dashboard = () => {
                    sub={dueSoon.length ? `${dueSoon.length} ${dueSoon.length === 1 ? 'card' : 'cards'} due` : 'nothing due'} />
             </div>
 
+            {/* Card tiles — primary content */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <SectionTitle icon={CardIcon}>Your Cards</SectionTitle>
+                <span className="text-xs text-muted-foreground">
+                  {visibleCards.length} {visibleCards.length === 1 ? 'card' : 'cards'}
+                </span>
+              </div>
+              {visibleCards.length === 0 ? (
+                <Empty>No cards to show.</Empty>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {visibleCards.map((c) => <CardTile key={c.id} card={c} />)}
+                </div>
+              )}
+            </div>
+
             {/* Cash accounts + activity summary */}
             <div className="grid gap-4 lg:grid-cols-3">
               <div className="lg:col-span-2 bg-card rounded-2xl border border-border p-5">
@@ -196,36 +214,6 @@ const Dashboard = () => {
                   </div>
                 </div>
               </div>
-            </div>
-
-            {/* Card obligations */}
-            <div className="bg-card rounded-2xl border border-border p-5">
-              <SectionTitle icon={CalendarClock}>Card Obligations</SectionTitle>
-              <p className="text-xs text-muted-foreground mb-3">
-                Statement balances, closing &amp; due dates, and whether the last payment posted.
-              </p>
-              {visibleCards.length === 0 ? (
-                <Empty>No cards to show.</Empty>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-xs text-muted-foreground border-b border-border">
-                        <th className="py-2 pr-3 font-medium">Card</th>
-                        <th className="py-2 px-3 font-medium text-right">Statement Due</th>
-                        <th className="py-2 px-3 font-medium text-right">Min</th>
-                        <th className="py-2 px-3 font-medium">Closes</th>
-                        <th className="py-2 px-3 font-medium">Due</th>
-                        <th className="py-2 px-3 font-medium">Last Payment</th>
-                        <th className="py-2 pl-3 font-medium">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visibleCards.map((c) => <ObligationRow key={c.id} card={c} />)}
-                    </tbody>
-                  </table>
-                </div>
-              )}
             </div>
 
             {/* Payments + recent transactions */}
@@ -343,53 +331,95 @@ function Flow({ label, value, icon: Icon, tone }: {
   );
 }
 
-function ObligationRow({ card }: { card: FinanceCard }) {
+function CardTile({ card }: { card: FinanceCard }) {
   const due = resolveDue(card);
   const paidStatement =
     card.currentBalance <= 0.005 ||
     (card.paymentStatus?.toLowerCase().includes('not required') ?? false) ||
     (card.paymentStatus?.toLowerCase().includes('no payment') ?? false);
 
-  let statusBadge: { label: string; tone: Tone; icon: React.ComponentType<{ className?: string }> };
-  if (card.isOverdue) statusBadge = { label: 'Overdue', tone: 'danger', icon: AlertTriangle };
-  else if (paidStatement) statusBadge = { label: 'Paid / none due', tone: 'success', icon: CheckCircle2 };
-  else if (due && due.days <= 3) statusBadge = { label: `Due in ${due.days}d`, tone: 'danger', icon: AlertTriangle };
-  else if (due && due.days <= 7) statusBadge = { label: `Due in ${due.days}d`, tone: 'warning', icon: CalendarClock };
-  else statusBadge = { label: due ? `Due in ${due.days}d` : 'No due date', tone: 'muted', icon: CalendarClock };
+  let status: { label: string; tone: Tone; icon: React.ComponentType<{ className?: string }> };
+  if (card.isOverdue) status = { label: 'Overdue', tone: 'danger', icon: AlertTriangle };
+  else if (paidStatement) status = { label: 'Paid / none due', tone: 'success', icon: CheckCircle2 };
+  else if (due && due.days <= 3) status = { label: due.days <= 0 ? 'Due today' : `Due in ${due.days}d`, tone: 'danger', icon: AlertTriangle };
+  else if (due && due.days <= 7) status = { label: `Due in ${due.days}d`, tone: 'warning', icon: CalendarClock };
+  else status = { label: due ? `Due in ${due.days}d` : 'No due date', tone: 'muted', icon: CalendarClock };
+
+  const gradient = cardColorClasses[(card.color as CardColor)] ?? cardColorClasses.navy;
+  const utilization = card.creditLimit > 0 ? Math.min(1, card.totalBalance / card.creditLimit) : null;
 
   return (
-    <tr className="border-b border-border/60 last:border-0">
-      <td className="py-2.5 pr-3">
-        <p className="font-medium leading-tight">{card.name}</p>
-        <p className="text-xs text-muted-foreground">
-          {card.companyName ? `${card.companyName} · ` : ''}
-          {card.lastFour ? `••${card.lastFour}` : ''}
-          {card.purchaseApr ? ` · ${card.purchaseApr}% APR` : ''}
-        </p>
-      </td>
-      <td className="py-2.5 px-3 text-right font-medium">{fmtMoney(card.currentBalance, { cents: true })}</td>
-      <td className="py-2.5 px-3 text-right text-muted-foreground">
-        {card.minimumPayment ? fmtMoney(card.minimumPayment) : '—'}
-      </td>
-      <td className="py-2.5 px-3 whitespace-nowrap">
-        {card.lastStatementDate ? fmtDate(card.lastStatementDate)
-          : card.statementDay ? `Day ${card.statementDay}` : '—'}
-      </td>
-      <td className="py-2.5 px-3 whitespace-nowrap">
-        {due ? format(due.date, 'MMM d') : card.dueDay ? `Day ${card.dueDay}` : '—'}
-      </td>
-      <td className="py-2.5 px-3 whitespace-nowrap text-muted-foreground">
-        {card.lastPaymentAmount != null
-          ? <span><span className="text-foreground font-medium">{fmtMoney(card.lastPaymentAmount)}</span>
-              <span className="text-xs"> · {fmtDate(card.lastPaymentDate)}</span></span>
-          : '—'}
-      </td>
-      <td className="py-2.5 pl-3">
-        <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap', toneBg[statusBadge.tone])}>
-          <statusBadge.icon className="w-3 h-3" />{statusBadge.label}
-        </span>
-      </td>
-    </tr>
+    <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm flex flex-col">
+      {/* Colored header strip */}
+      <div className={cn('bg-gradient-to-r px-4 py-3 text-white', gradient)}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="font-semibold leading-tight truncate">{card.name}</p>
+            <p className="text-xs text-white/80 truncate">
+              {card.lastFour ? `•••• ${card.lastFour}` : ''}{card.companyName ? ` · ${card.companyName}` : ''}
+            </p>
+          </div>
+          <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap bg-white/15 text-white')}>
+            <status.icon className="w-3 h-3" />{status.label}
+          </span>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="p-4 flex flex-col gap-3 flex-1">
+        <div className="flex items-end justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground">Statement Due</p>
+            <p className="text-2xl font-bold text-card-foreground">{fmtMoney(card.currentBalance, { cents: true })}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">Min Payment</p>
+            <p className="font-semibold">{card.minimumPayment ? fmtMoney(card.minimumPayment) : '—'}</p>
+          </div>
+        </div>
+
+        {/* Utilization */}
+        {utilization != null && (
+          <div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+              <span>{fmtMoney(card.totalBalance)} of {fmtMoney(card.creditLimit)}</span>
+              <span>{Math.round(utilization * 100)}%</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+              <div className={cn('h-full rounded-full',
+                utilization >= 0.9 ? 'bg-destructive' : utilization >= 0.5 ? 'bg-warning' : 'bg-success')}
+                style={{ width: `${Math.max(2, utilization * 100)}%` }} />
+            </div>
+          </div>
+        )}
+
+        {/* Dates */}
+        <div className="grid grid-cols-2 gap-3 text-sm pt-1">
+          <Field label="Closes">
+            {card.lastStatementDate ? format(parseISO(card.lastStatementDate), 'MMM d')
+              : card.statementDay ? `Day ${card.statementDay}` : '—'}
+          </Field>
+          <Field label="Due">
+            {due ? format(due.date, 'MMM d') : card.dueDay ? `Day ${card.dueDay}` : '—'}
+          </Field>
+          <Field label="Last Payment">
+            {card.lastPaymentAmount != null ? fmtMoney(card.lastPaymentAmount) : '—'}
+          </Field>
+          <Field label="Paid On">
+            {card.lastPaymentDate ? format(parseISO(card.lastPaymentDate), 'MMM d') : '—'}
+          </Field>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="font-medium text-card-foreground">{children}</p>
+    </div>
   );
 }
 
