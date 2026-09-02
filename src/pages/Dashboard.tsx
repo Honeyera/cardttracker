@@ -239,7 +239,7 @@ const Dashboard = () => {
                           </p>
                         </div>
                         <span className={cn('font-semibold whitespace-nowrap', urgent ? 'text-destructive' : 'text-warning')}>
-                          {fmtMoney(c.currentBalance)}
+                          {fmtMoney(c.minimumPayment && c.minimumPayment > 0 ? c.minimumPayment : (c.lastStatementBalance ?? c.currentBalance))}
                         </span>
                       </button>
                     );
@@ -497,12 +497,14 @@ function CardTile({ card, onClick }: { card: FinanceCard; onClick?: () => void }
       <div className="p-4 flex flex-col gap-3 flex-1">
         <div className="flex items-end justify-between">
           <div>
-            <p className="text-xs text-muted-foreground">Statement Due</p>
-            <p className="text-2xl font-bold text-card-foreground">{fmtMoney(card.currentBalance, { cents: true })}</p>
+            <p className="text-xs text-muted-foreground">Total Balance</p>
+            <p className="text-2xl font-bold text-card-foreground">{fmtMoney(card.totalBalance, { cents: true })}</p>
           </div>
           <div className="text-right">
-            <p className="text-xs text-muted-foreground">Min Payment</p>
-            <p className="font-semibold">{card.minimumPayment ? fmtMoney(card.minimumPayment) : '—'}</p>
+            <p className="text-xs text-muted-foreground">Statement Balance</p>
+            <p className="font-semibold">
+              {card.lastStatementBalance != null ? fmtMoney(card.lastStatementBalance, { cents: true }) : fmtMoney(card.currentBalance, { cents: true })}
+            </p>
           </div>
         </div>
 
@@ -521,20 +523,22 @@ function CardTile({ card, onClick }: { card: FinanceCard; onClick?: () => void }
           </div>
         )}
 
-        {/* Dates */}
+        {/* Dates & amounts */}
         <div className="grid grid-cols-2 gap-3 text-sm pt-1">
-          <Field label="Closes">
-            {card.lastStatementDate ? format(parseISO(card.lastStatementDate), 'MMM d')
-              : card.statementDay ? `Day ${card.statementDay}` : '—'}
+          <Field label="Min Payment">
+            {card.minimumPayment ? fmtMoney(card.minimumPayment, { cents: true }) : '—'}
           </Field>
           <Field label="Due">
             {due ? format(due.date, 'MMM d') : card.dueDay ? `Day ${card.dueDay}` : '—'}
           </Field>
-          <Field label="Last Payment">
-            {card.lastPaymentAmount != null ? fmtMoney(card.lastPaymentAmount) : '—'}
+          <Field label="Closes">
+            {card.lastStatementDate ? format(parseISO(card.lastStatementDate), 'MMM d')
+              : card.statementDay ? `Day ${card.statementDay}` : '—'}
           </Field>
-          <Field label="Paid On">
-            {card.lastPaymentDate ? format(parseISO(card.lastPaymentDate), 'MMM d') : '—'}
+          <Field label="Last Payment">
+            {card.lastPaymentAmount != null
+              ? <span>{fmtMoney(card.lastPaymentAmount)}{card.lastPaymentDate ? <span className="text-muted-foreground font-normal"> · {format(parseISO(card.lastPaymentDate), 'MMM d')}</span> : ''}</span>
+              : '—'}
           </Field>
         </div>
         <div className="flex items-center gap-1 text-xs text-primary mt-auto pt-1">
