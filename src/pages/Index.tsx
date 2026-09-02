@@ -27,7 +27,7 @@ import { ChargeRecommendation } from '@/components/ChargeRecommendation';
 import { DashboardStats } from '@/components/DashboardStats';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, CreditCard, Wallet, Upload, Loader2, LayoutGrid, Table, ClipboardPaste, Search, Building2, Trophy } from 'lucide-react';
+import { Plus, CreditCard, Wallet, Upload, Loader2, LayoutGrid, Table, ClipboardPaste, Search, Building2, Trophy, LayoutDashboard } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { UserMenu } from '@/components/UserMenu';
 import { Input } from '@/components/ui/input';
@@ -157,6 +157,12 @@ const Index = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" asChild>
+              <Link to="/dashboard">
+                <LayoutDashboard className="w-4 h-4 mr-1" />
+                Dashboard
+              </Link>
+            </Button>
             <Button size="sm" variant="outline" asChild>
               <Link to="/points">
                 <Trophy className="w-4 h-4 mr-1" />
