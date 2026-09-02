@@ -65,6 +65,26 @@ export interface FinanceCard {
   syncedAt: string | null;
 }
 
+export interface FinanceAlert {
+  id: string;
+  alertType: string | null;
+  severity: string | null;
+  title: string | null;
+  message: string | null;
+  status: string | null;
+  creditCardId: string | null;
+  accountId: string | null;
+  triggeredAt: string | null;
+}
+
+export interface ForecastPoint {
+  date: string; // YYYY-MM-DD
+  projectedBalance: number;
+  expectedInflow: number;
+  expectedOutflow: number;
+  projectedNet: number;
+}
+
 const num = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -159,10 +179,55 @@ export function useFinanceData() {
     },
   });
 
+  const alertsQuery = useQuery({
+    queryKey: ['finance', 'alerts', user?.id],
+    enabled: !!user,
+    queryFn: async (): Promise<FinanceAlert[]> => {
+      const { data, error } = await db
+        .from('alerts')
+        .select('*')
+        .order('triggered_at', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return (data ?? []).map((a: any) => ({
+        id: a.id,
+        alertType: a.alert_type ?? null,
+        severity: a.severity ?? null,
+        title: a.title ?? null,
+        message: a.message ?? null,
+        status: a.status ?? null,
+        creditCardId: a.credit_card_id ?? null,
+        accountId: a.account_id ?? null,
+        triggeredAt: a.triggered_at ?? null,
+      }));
+    },
+  });
+
+  const forecastQuery = useQuery({
+    queryKey: ['finance', 'forecast', user?.id],
+    enabled: !!user,
+    queryFn: async (): Promise<ForecastPoint[]> => {
+      const { data, error } = await db
+        .from('cashflow_forecast')
+        .select('*')
+        .order('forecast_date', { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map((f: any) => ({
+        date: f.forecast_date,
+        projectedBalance: num(f.projected_balance),
+        expectedInflow: num(f.expected_inflow),
+        expectedOutflow: num(f.expected_outflow),
+        projectedNet: num(f.projected_net_cashflow),
+      }));
+    },
+  });
+
   return {
     accounts: accountsQuery.data ?? [],
     transactions: transactionsQuery.data ?? [],
     cards: cardsQuery.data ?? [],
+    alerts: alertsQuery.data ?? [],
+    forecast: forecastQuery.data ?? [],
     loading: accountsQuery.isLoading || transactionsQuery.isLoading || cardsQuery.isLoading,
     error: accountsQuery.error || transactionsQuery.error || cardsQuery.error,
     lastSyncedAt: (cardsQuery.data ?? []).reduce<string | null>((latest, c) => {

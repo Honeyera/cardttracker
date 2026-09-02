@@ -2,17 +2,19 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { format, parseISO, differenceInCalendarDays } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
-import { useFinanceData, FinanceAccount, FinanceCard, FinanceTransaction } from '@/hooks/useFinanceData';
+import { useFinanceData, FinanceAccount, FinanceCard, FinanceTransaction, FinanceAlert, ForecastPoint } from '@/hooks/useFinanceData';
 import { getNextOccurrence } from '@/utils/dateUtils';
 import { cardColorClasses, CardColor } from '@/types/creditCard';
 import { UserMenu } from '@/components/UserMenu';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceDot } from 'recharts';
 import {
   Wallet, LayoutDashboard, CreditCard as CardIcon, Trophy, Loader2, Building2,
   ArrowDownRight, ArrowUpRight, Landmark, TrendingUp, TrendingDown, AlertTriangle,
-  CheckCircle2, CalendarClock, RefreshCw,
+  CheckCircle2, CalendarClock, RefreshCw, Bell, ChevronRight,
 } from 'lucide-react';
 
 const fmtMoney = (n: number, opts: { cents?: boolean } = {}) =>
@@ -58,8 +60,9 @@ function urgencyRank(card: FinanceCard): number {
 const Dashboard = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
-  const { accounts, transactions, cards, loading, lastSyncedAt } = useFinanceData();
+  const { accounts, transactions, cards, alerts, forecast, loading, lastSyncedAt } = useFinanceData();
   const [company, setCompany] = useState('all');
+  const [selectedCard, setSelectedCard] = useState<FinanceCard | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) navigate('/auth');
@@ -106,6 +109,25 @@ const Dashboard = () => {
 
   const cardName = (id: string | null) =>
     cards.find((c) => c.id === id)?.name ?? null;
+
+  // Cards needing attention: overdue, or due within 7 days with a balance owed.
+  const attentionCards = useMemo(
+    () => visibleCards
+      .filter((c) => c.isOverdue || (() => { const d = resolveDue(c); return d && d.days <= 7 && !isSettled(c); })())
+      .sort((a, b) => urgencyRank(a) - urgencyRank(b)),
+    [visibleCards],
+  );
+  const openAlerts = useMemo(
+    () => alerts.filter((a) => (a.status ?? 'open').toLowerCase() !== 'resolved'),
+    [alerts],
+  );
+
+  // Forecast: lowest projected balance point over the horizon.
+  const lowestPoint = useMemo(() => {
+    if (forecast.length === 0) return null;
+    return forecast.reduce((min, p) => (p.projectedBalance < min.projectedBalance ? p : min), forecast[0]);
+  }, [forecast]);
+  const endPoint = forecast.length ? forecast[forecast.length - 1] : null;
 
   if (authLoading || (!user && !authLoading)) {
     return (
@@ -173,6 +195,47 @@ const Dashboard = () => {
           </div>
         ) : (
           <>
+            {/* Needs Attention */}
+            {(attentionCards.length > 0 || openAlerts.length > 0) && (
+              <div className="rounded-2xl border border-warning/40 bg-warning/5 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Bell className="w-4 h-4 text-warning" />
+                  <h3 className="font-semibold text-foreground">Needs Attention</h3>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {attentionCards.map((c) => {
+                    const due = resolveDue(c);
+                    const urgent = c.isOverdue || (due != null && due.days <= 3);
+                    return (
+                      <button key={c.id} onClick={() => setSelectedCard(c)}
+                        className="flex items-center justify-between gap-2 text-left rounded-lg bg-card border border-border px-3 py-2 hover:border-warning/50 transition-colors">
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{c.name} <span className="text-muted-foreground font-normal">••{c.lastFour}</span></p>
+                          <p className="text-xs text-muted-foreground">
+                            {c.isOverdue ? 'Overdue' : due ? (due.days <= 0 ? 'Due today' : `Due in ${due.days} days`) : 'Due soon'}
+                            {due ? ` · ${format(due.date, 'MMM d')}` : ''}
+                          </p>
+                        </div>
+                        <span className={cn('font-semibold whitespace-nowrap', urgent ? 'text-destructive' : 'text-warning')}>
+                          {fmtMoney(c.currentBalance)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {openAlerts.map((a) => (
+                    <div key={a.id} className="flex items-start gap-2 rounded-lg bg-card border border-border px-3 py-2">
+                      <AlertTriangle className={cn('w-4 h-4 mt-0.5 shrink-0',
+                        (a.severity ?? '').toLowerCase() === 'high' ? 'text-destructive' : 'text-warning')} />
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{a.title ?? a.alertType ?? 'Alert'}</p>
+                        {a.message && <p className="text-xs text-muted-foreground line-clamp-2">{a.message}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* KPI row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <Kpi label="Available Cash" value={fmtMoney(availableCash)} icon={Landmark} tone="success"
@@ -202,6 +265,29 @@ const Dashboard = () => {
               )}
             </div>
 
+            {/* Cash projection */}
+            {forecast.length > 0 && (
+              <div className="bg-card rounded-2xl border border-border p-5">
+                <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                  <SectionTitle icon={TrendingUp}>Cash Projection</SectionTitle>
+                  <div className="flex items-center gap-4 text-sm">
+                    {lowestPoint && (
+                      <span className="text-muted-foreground">
+                        Lowest: <span className={cn('font-semibold', lowestPoint.projectedBalance < 0 ? 'text-destructive' : 'text-foreground')}>
+                          {fmtMoney(lowestPoint.projectedBalance)}</span> on {format(parseISO(lowestPoint.date), 'MMM d')}
+                      </span>
+                    )}
+                    {endPoint && (
+                      <span className="text-muted-foreground">
+                        End: <span className="font-semibold text-foreground">{fmtMoney(endPoint.projectedBalance)}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <CashProjectionChart data={forecast} lowest={lowestPoint} />
+              </div>
+            )}
+
             {/* Card tiles */}
             <div>
               <div className="flex items-center justify-between mb-3">
@@ -214,7 +300,7 @@ const Dashboard = () => {
                 <Empty>No cards to show.</Empty>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {visibleCards.map((c) => <CardTile key={c.id} card={c} />)}
+                  {visibleCards.map((c) => <CardTile key={c.id} card={c} onClick={() => setSelectedCard(c)} />)}
                 </div>
               )}
             </div>
@@ -265,6 +351,12 @@ const Dashboard = () => {
           </>
         )}
       </main>
+
+      <CardDetailDialog
+        card={selectedCard}
+        transactions={selectedCard ? transactions.filter((t) => t.creditCardId === selectedCard.id) : []}
+        onClose={() => setSelectedCard(null)}
+      />
     </div>
   );
 };
@@ -348,7 +440,7 @@ function Flow({ label, value, icon: Icon, tone }: {
   );
 }
 
-function CardTile({ card }: { card: FinanceCard }) {
+function CardTile({ card, onClick }: { card: FinanceCard; onClick?: () => void }) {
   const due = resolveDue(card);
 
   let status: { label: string; tone: Tone; icon: React.ComponentType<{ className?: string }> };
@@ -362,7 +454,8 @@ function CardTile({ card }: { card: FinanceCard }) {
   const utilization = card.creditLimit > 0 ? Math.min(1, card.totalBalance / card.creditLimit) : null;
 
   return (
-    <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm flex flex-col">
+    <button type="button" onClick={onClick}
+      className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm flex flex-col text-left hover:border-primary/40 hover:shadow-md transition-all">
       {/* Colored header strip */}
       <div className={cn('bg-gradient-to-r px-4 py-3 text-white', gradient)}>
         <div className="flex items-start justify-between gap-2">
@@ -422,8 +515,84 @@ function CardTile({ card }: { card: FinanceCard }) {
             {card.lastPaymentDate ? format(parseISO(card.lastPaymentDate), 'MMM d') : '—'}
           </Field>
         </div>
+        <div className="flex items-center gap-1 text-xs text-primary mt-auto pt-1">
+          View activity <ChevronRight className="w-3 h-3" />
+        </div>
       </div>
+    </button>
+  );
+}
+
+function CashProjectionChart({ data, lowest }: { data: ForecastPoint[]; lowest: ForecastPoint | null }) {
+  const chartData = data.map((p) => ({ ...p, label: format(parseISO(p.date), 'MMM d') }));
+  return (
+    <div className="h-56 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+          <defs>
+            <linearGradient id="cashFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))"
+            interval="preserveStartEnd" minTickGap={28} />
+          <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" width={64}
+            tickFormatter={(v) => `$${Math.round(Number(v) / 1000)}k`} />
+          <Tooltip
+            formatter={(v: number) => [fmtMoney(Number(v), { cents: true }), 'Projected balance']}
+            labelStyle={{ color: 'hsl(var(--foreground))' }}
+            contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 12, fontSize: 12 }} />
+          <Area type="monotone" dataKey="projectedBalance" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#cashFill)" />
+          {lowest && (
+            <ReferenceDot x={format(parseISO(lowest.date), 'MMM d')} y={lowest.projectedBalance}
+              r={4} fill="hsl(var(--destructive))" stroke="hsl(var(--card))" strokeWidth={2} />
+          )}
+        </AreaChart>
+      </ResponsiveContainer>
     </div>
+  );
+}
+
+function CardDetailDialog({ card, transactions, onClose }: {
+  card: FinanceCard | null; transactions: FinanceTransaction[]; onClose: () => void;
+}) {
+  const open = card != null;
+  const due = card ? resolveDue(card) : null;
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        {card && (
+          <>
+            <DialogHeader>
+              <DialogTitle>{card.name} <span className="text-muted-foreground font-normal">•••• {card.lastFour}</span></DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <Field label="Statement Balance">{fmtMoney(card.currentBalance, { cents: true })}</Field>
+              <Field label="Total Owed">{fmtMoney(card.totalBalance, { cents: true })}</Field>
+              <Field label="Credit Limit">{card.creditLimit ? fmtMoney(card.creditLimit) : '—'}</Field>
+              <Field label="Minimum Payment">{card.minimumPayment ? fmtMoney(card.minimumPayment) : '—'}</Field>
+              <Field label="Statement Closes">{card.lastStatementDate ? fmtDate(card.lastStatementDate) : card.statementDay ? `Day ${card.statementDay}` : '—'}</Field>
+              <Field label="Payment Due">{due ? fmtDate(due.date.toISOString()) : card.dueDay ? `Day ${card.dueDay}` : '—'}</Field>
+              <Field label="Last Payment">{card.lastPaymentAmount != null ? fmtMoney(card.lastPaymentAmount) : '—'}</Field>
+              <Field label="Paid On">{card.lastPaymentDate ? fmtDate(card.lastPaymentDate) : '—'}</Field>
+              <Field label="Purchase APR">{card.purchaseApr ? `${card.purchaseApr}%` : '—'}</Field>
+              <Field label="Company">{card.companyName ?? '—'}</Field>
+            </div>
+            <div className="mt-2">
+              <p className="text-sm font-semibold mb-2">Recent Activity</p>
+              {transactions.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">No transactions synced for this card yet.</p>
+              ) : (
+                <div className="space-y-1">
+                  {transactions.slice(0, 25).map((t) => <TxnRow key={t.id} txn={t} cardName={null} />)}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
