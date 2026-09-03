@@ -126,7 +126,7 @@ export function useFinanceData() {
         .from('transactions')
         .select('*')
         .order('transaction_date', { ascending: false })
-        .limit(500);
+        .limit(5000);
       if (error) throw error;
       return (data ?? []).map((t: any) => ({
         id: t.id,

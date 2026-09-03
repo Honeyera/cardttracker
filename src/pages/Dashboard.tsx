@@ -623,12 +623,17 @@ function CardDetailDialog({ card, transactions, onClose }: {
               <Field label="Company">{card.companyName ?? '—'}</Field>
             </div>
             <div className="mt-2">
-              <p className="text-sm font-semibold mb-2">Recent Activity</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-semibold">Activity</p>
+                <span className="text-xs text-muted-foreground">
+                  {transactions.length} {transactions.length === 1 ? 'transaction' : 'transactions'}
+                </span>
+              </div>
               {transactions.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">No transactions synced for this card yet.</p>
               ) : (
                 <div className="space-y-1">
-                  {transactions.slice(0, 25).map((t) => <TxnRow key={t.id} txn={t} cardName={null} />)}
+                  {transactions.map((t) => <TxnRow key={t.id} txn={t} cardName={null} />)}
                 </div>
               )}
             </div>
