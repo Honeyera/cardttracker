@@ -68,6 +68,17 @@ function isSettled(card: FinanceCard): boolean {
   if (card.currentBalance <= 0.005) return true;
   // No statement/minimum owed and no upcoming explicit due amount → nothing due.
   if ((card.minimumPayment ?? 0) <= 0.005 && (card.lastStatementBalance ?? 0) <= 0.005) return true;
+  // Statement fully covered: a payment on/after the statement date that meets or
+  // exceeds the statement balance means the statement is paid, and any remaining
+  // balance is next-cycle spending — nothing is due now.
+  if (
+    (card.lastStatementBalance ?? 0) > 0.005 &&
+    card.lastPaymentAmount != null &&
+    card.lastPaymentDate != null &&
+    card.lastStatementDate != null &&
+    card.lastPaymentAmount + 0.005 >= card.lastStatementBalance! &&
+    card.lastPaymentDate >= card.lastStatementDate
+  ) return true;
   return false;
 }
 
