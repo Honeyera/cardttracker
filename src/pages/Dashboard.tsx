@@ -512,10 +512,13 @@ function CardTile({ card, onClick }: { card: FinanceCard; onClick?: () => void }
             <p className="text-2xl font-bold text-card-foreground">{fmtMoney(card.totalBalance, { cents: true })}</p>
           </div>
           <div className="text-right">
-            <p className="text-xs text-muted-foreground">Statement Balance</p>
+            <p className="text-xs text-muted-foreground">Last Statement</p>
             <p className="font-semibold">
               {card.lastStatementBalance != null ? fmtMoney(card.lastStatementBalance, { cents: true }) : fmtMoney(card.currentBalance, { cents: true })}
             </p>
+            {(card.lastStatementBalance ?? 0) > 0.005 && isSettled(card) && (
+              <p className="text-[11px] text-success font-medium">paid</p>
+            )}
           </div>
         </div>
 
@@ -605,8 +608,11 @@ function CardDetailDialog({ card, transactions, onClose }: {
               <DialogTitle>{card.name} <span className="text-muted-foreground font-normal">•••• {card.lastFour}</span></DialogTitle>
             </DialogHeader>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <Field label="Statement Balance">{fmtMoney(card.currentBalance, { cents: true })}</Field>
-              <Field label="Total Owed">{fmtMoney(card.totalBalance, { cents: true })}</Field>
+              <Field label="Total Balance (owed now)">{fmtMoney(card.totalBalance, { cents: true })}</Field>
+              <Field label="Last Statement">
+                {card.lastStatementBalance != null ? fmtMoney(card.lastStatementBalance, { cents: true }) : '—'}
+                {(card.lastStatementBalance ?? 0) > 0.005 && isSettled(card) && <span className="text-success font-normal"> · paid</span>}
+              </Field>
               <Field label="Credit Limit">{card.creditLimit ? fmtMoney(card.creditLimit) : '—'}</Field>
               <Field label="Minimum Payment">{card.minimumPayment ? fmtMoney(card.minimumPayment) : '—'}</Field>
               <Field label="Statement Closes">{card.lastStatementDate ? fmtDate(card.lastStatementDate) : card.statementDay ? `Day ${card.statementDay}` : '—'}</Field>
