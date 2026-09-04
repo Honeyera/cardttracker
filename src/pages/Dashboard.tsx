@@ -208,11 +208,14 @@ const Dashboard = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" asChild>
-              <Link to="/"><CardIcon className="w-4 h-4 mr-1" />Cards</Link>
+            <Button size="sm" asChild>
+              <Link to="/dashboard"><LayoutDashboard className="w-4 h-4 mr-1" />Dashboard</Link>
             </Button>
             <Button size="sm" variant="outline" asChild>
               <Link to="/points"><Trophy className="w-4 h-4 mr-1" />Points</Link>
+            </Button>
+            <Button size="sm" variant="ghost" asChild>
+              <Link to="/"><CardIcon className="w-4 h-4 mr-1" />Old Dashboard</Link>
             </Button>
             <UserMenu userEmail={user?.email || ''} onSignOut={async () => { await signOut(); navigate('/auth'); }} />
           </div>
