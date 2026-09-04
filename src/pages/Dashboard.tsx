@@ -750,16 +750,24 @@ function isoMonthStart(): string {
   const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
 }
 
+type Flow = 'all' | 'in' | 'out';
+const isMoneyIn = (t: FinanceTransaction) => t.type === 'income';
+const isMoneyOut = (t: FinanceTransaction) => t.type === 'expense' || t.type === 'payment';
+
 function TransactionsPanel({ transactions, resetKey }: { transactions: FinanceTransaction[]; resetKey: string }) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  useEffect(() => { setFrom(''); setTo(''); }, [resetKey]);
+  const [flow, setFlow] = useState<Flow>('all');
+  useEffect(() => { setFrom(''); setTo(''); setFlow('all'); }, [resetKey]);
 
   const filtered = useMemo(
-    () => transactions.filter((t) => (!from || t.date >= from) && (!to || t.date <= to)),
-    [transactions, from, to],
+    () => transactions.filter((t) =>
+      (!from || t.date >= from) && (!to || t.date <= to) &&
+      (flow === 'all' || (flow === 'in' ? isMoneyIn(t) : isMoneyOut(t)))),
+    [transactions, from, to, flow],
   );
-  const rangeSpend = filtered.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const totalIn = filtered.filter(isMoneyIn).reduce((s, t) => s + t.amount, 0);
+  const totalOut = filtered.filter(isMoneyOut).reduce((s, t) => s + t.amount, 0);
   const preset = (f: string, t = '') => { setFrom(f); setTo(t); };
 
   return (
@@ -768,9 +776,18 @@ function TransactionsPanel({ transactions, resetKey }: { transactions: FinanceTr
         <p className="text-sm font-semibold">Activity</p>
         <span className="text-xs text-muted-foreground">
           {filtered.length} of {transactions.length}
-          {rangeSpend > 0 && <span> · {fmtMoney(rangeSpend, { cents: true })} spent</span>}
+          {totalIn > 0 && <span className="text-success"> · +{fmtMoney(totalIn)}</span>}
+          {totalOut > 0 && <span> · −{fmtMoney(totalOut)}</span>}
         </span>
       </div>
+
+      {/* Money In / Money Out filter */}
+      <div className="flex items-center gap-1 mb-2">
+        <RangeChip onClick={() => setFlow('all')} active={flow === 'all'}>All</RangeChip>
+        <RangeChip onClick={() => setFlow('in')} active={flow === 'in'}>Money In</RangeChip>
+        <RangeChip onClick={() => setFlow('out')} active={flow === 'out'}>Money Out</RangeChip>
+      </div>
+
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
           className="h-8 rounded-md border border-border bg-background px-2 text-xs" />
