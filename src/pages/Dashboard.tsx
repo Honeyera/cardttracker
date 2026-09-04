@@ -542,7 +542,7 @@ function AccountDetailDialog({ account, transactions, history, onClose }: {
   const chartData = history.map((s) => ({ ...s, label: format(parseISO(s.date), 'MMM d') }));
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto overflow-x-hidden">
         {account && (
           <>
             <DialogHeader>
@@ -763,7 +763,7 @@ function TransactionsPanel({ transactions, resetKey }: { transactions: FinanceTr
   const preset = (f: string, t = '') => { setFrom(f); setTo(t); };
 
   return (
-    <div className="mt-2">
+    <div className="mt-2 min-w-0">
       <div className="flex items-center justify-between mb-2">
         <p className="text-sm font-semibold">Activity</p>
         <span className="text-xs text-muted-foreground">
@@ -804,7 +804,7 @@ function CardDetailDialog({ card, transactions, onClose }: {
   const due = card ? resolveDue(card) : null;
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto overflow-x-hidden">
         {card && (
           <>
             <DialogHeader>
