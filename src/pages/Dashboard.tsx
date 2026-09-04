@@ -14,7 +14,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceD
 import {
   Wallet, LayoutDashboard, CreditCard as CardIcon, Trophy, Loader2, Building2,
   ArrowDownRight, ArrowUpRight, Landmark, TrendingUp, TrendingDown, AlertTriangle,
-  CheckCircle2, CalendarClock, RefreshCw, Bell, ChevronRight,
+  CheckCircle2, CalendarClock, RefreshCw, Bell, ChevronRight, Percent,
 } from 'lucide-react';
 
 const fmtMoney = (n: number, opts: { cents?: boolean } = {}) =>
@@ -80,6 +80,23 @@ function isSettled(card: FinanceCard): boolean {
     card.lastPaymentDate >= card.lastStatementDate
   ) return true;
   return false;
+}
+
+// Interest risk: a payment was made toward the last statement, but it was less
+// than the statement balance — so the unpaid remainder will accrue interest.
+// Returns the shortfall details, or null if the statement was paid in full /
+// nothing is owed / no payment has yet been applied to this statement.
+function interestRisk(card: FinanceCard): { paid: number; statement: number; remaining: number } | null {
+  if (isSettled(card)) return null;
+  const stmt = card.lastStatementBalance ?? 0;
+  if (stmt <= 0.005) return null;
+  if (card.lastPaymentAmount == null || !card.lastPaymentDate || !card.lastStatementDate) return null;
+  // Only count a payment that applies to this statement (made on/after it closed).
+  if (card.lastPaymentDate < card.lastStatementDate) return null;
+  const paid = card.lastPaymentAmount;
+  if (paid + 0.005 >= stmt) return null; // fully covered
+  if (paid <= 0.005) return null; // no payment applied — that's a "due" case, not underpayment
+  return { paid, statement: stmt, remaining: stmt - paid };
 }
 
 // Lower rank = more urgent (sorts first). Overdue < due-soon (by days) < settled.
@@ -153,6 +170,12 @@ const Dashboard = () => {
   const openAlerts = useMemo(
     () => alerts.filter((a) => (a.status ?? 'open').toLowerCase() !== 'resolved'),
     [alerts],
+  );
+
+  // Cards where the statement was underpaid → interest will accrue.
+  const interestRiskCards = useMemo(
+    () => visibleCards.map((c) => ({ card: c, risk: interestRisk(c) })).filter((x) => x.risk != null),
+    [visibleCards],
   );
 
   // Forecast: lowest projected balance point over the horizon.
@@ -229,7 +252,7 @@ const Dashboard = () => {
         ) : (
           <>
             {/* Needs Attention */}
-            {(attentionCards.length > 0 || openAlerts.length > 0) && (
+            {(attentionCards.length > 0 || openAlerts.length > 0 || interestRiskCards.length > 0) && (
               <div className="rounded-2xl border border-warning/40 bg-warning/5 p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <Bell className="w-4 h-4 text-warning" />
@@ -255,6 +278,21 @@ const Dashboard = () => {
                       </button>
                     );
                   })}
+                  {interestRiskCards.map(({ card, risk }) => (
+                    <button key={`ir-${card.id}`} onClick={() => setSelectedCard(card)}
+                      className="flex items-center justify-between gap-2 text-left rounded-lg bg-card border border-destructive/30 px-3 py-2 hover:border-destructive/60 transition-colors">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <Percent className="w-4 h-4 mt-0.5 shrink-0 text-destructive" />
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{card.name} <span className="text-muted-foreground font-normal">••{card.lastFour}</span></p>
+                          <p className="text-xs text-muted-foreground">
+                            Paid {fmtMoney(risk!.paid)} of {fmtMoney(risk!.statement)} statement — interest will accrue
+                          </p>
+                        </div>
+                      </div>
+                      <span className="font-semibold whitespace-nowrap text-destructive">{fmtMoney(risk!.remaining)}</span>
+                    </button>
+                  ))}
                   {openAlerts.map((a) => (
                     <div key={a.id} className="flex items-start gap-2 rounded-lg bg-card border border-border px-3 py-2">
                       <AlertTriangle className={cn('w-4 h-4 mt-0.5 shrink-0',
@@ -485,6 +523,7 @@ function CardTile({ card, onClick }: { card: FinanceCard; onClick?: () => void }
 
   const gradient = cardColorClasses[(card.color as CardColor)] ?? cardColorClasses.navy;
   const utilization = card.creditLimit > 0 ? Math.min(1, card.totalBalance / card.creditLimit) : null;
+  const risk = interestRisk(card);
 
   return (
     <button type="button" onClick={onClick}
@@ -498,9 +537,17 @@ function CardTile({ card, onClick }: { card: FinanceCard; onClick?: () => void }
               {card.lastFour ? `•••• ${card.lastFour}` : ''}{card.companyName ? ` · ${card.companyName}` : ''}
             </p>
           </div>
-          <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap bg-white/15 text-white')}>
-            <status.icon className="w-3 h-3" />{status.label}
-          </span>
+          <div className="flex items-center gap-1 shrink-0">
+            {risk && (
+              <span title={`Paid ${fmtMoney(risk.paid)} of ${fmtMoney(risk.statement)} statement — interest will accrue`}
+                className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/20 text-white">
+                <Percent className="w-3 h-3" />
+              </span>
+            )}
+            <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap bg-white/15 text-white')}>
+              <status.icon className="w-3 h-3" />{status.label}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -534,6 +581,13 @@ function CardTile({ card, onClick }: { card: FinanceCard; onClick?: () => void }
                 utilization >= 0.9 ? 'bg-destructive' : utilization >= 0.5 ? 'bg-warning' : 'bg-success')}
                 style={{ width: `${Math.max(2, utilization * 100)}%` }} />
             </div>
+          </div>
+        )}
+
+        {risk && (
+          <div className="flex items-center gap-2 rounded-lg bg-destructive/10 text-destructive px-2.5 py-1.5 text-xs">
+            <Percent className="w-3.5 h-3.5 shrink-0" />
+            <span>Underpaid statement — {fmtMoney(risk.remaining)} may accrue interest</span>
           </div>
         )}
 
