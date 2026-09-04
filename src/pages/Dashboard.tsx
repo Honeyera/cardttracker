@@ -594,11 +594,32 @@ function CashProjectionChart({ data, lowest }: { data: ForecastPoint[]; lowest: 
   );
 }
 
+function isoDaysAgo(days: number): string {
+  const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+function isoMonthStart(): string {
+  const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+}
+
 function CardDetailDialog({ card, transactions, onClose }: {
   card: FinanceCard | null; transactions: FinanceTransaction[]; onClose: () => void;
 }) {
   const open = card != null;
   const due = card ? resolveDue(card) : null;
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+
+  // Reset the range whenever a different card is opened.
+  useEffect(() => { setFrom(''); setTo(''); }, [card?.id]);
+
+  const filtered = useMemo(
+    () => transactions.filter((t) => (!from || t.date >= from) && (!to || t.date <= to)),
+    [transactions, from, to],
+  );
+  const rangeSpend = filtered.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+
+  const preset = (f: string, t = '') => { setFrom(f); setTo(t); };
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
@@ -626,14 +647,33 @@ function CardDetailDialog({ card, transactions, onClose }: {
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm font-semibold">Activity</p>
                 <span className="text-xs text-muted-foreground">
-                  {transactions.length} {transactions.length === 1 ? 'transaction' : 'transactions'}
+                  {filtered.length} of {transactions.length}
+                  {rangeSpend > 0 && <span> · {fmtMoney(rangeSpend, { cents: true })} spent</span>}
                 </span>
               </div>
+
+              {/* Date range filter */}
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
+                  className="h-8 rounded-md border border-border bg-background px-2 text-xs" />
+                <span className="text-xs text-muted-foreground">to</span>
+                <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
+                  className="h-8 rounded-md border border-border bg-background px-2 text-xs" />
+                <div className="flex items-center gap-1 ml-auto">
+                  <RangeChip onClick={() => preset(isoDaysAgo(30))} active={from === isoDaysAgo(30) && !to}>30d</RangeChip>
+                  <RangeChip onClick={() => preset(isoDaysAgo(90))} active={from === isoDaysAgo(90) && !to}>90d</RangeChip>
+                  <RangeChip onClick={() => preset(isoMonthStart())} active={from === isoMonthStart() && !to}>Month</RangeChip>
+                  <RangeChip onClick={() => preset('', '')} active={!from && !to}>All</RangeChip>
+                </div>
+              </div>
+
               {transactions.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">No transactions synced for this card yet.</p>
+              ) : filtered.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">No transactions in this date range.</p>
               ) : (
                 <div className="space-y-1">
-                  {transactions.map((t) => <TxnRow key={t.id} txn={t} cardName={null} />)}
+                  {filtered.map((t) => <TxnRow key={t.id} txn={t} cardName={null} />)}
                 </div>
               )}
             </div>
@@ -641,6 +681,16 @@ function CardDetailDialog({ card, transactions, onClose }: {
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function RangeChip({ children, onClick, active }: { children: React.ReactNode; onClick: () => void; active?: boolean }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={cn('px-2 h-7 rounded-md text-xs font-medium border transition-colors',
+        active ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-muted')}>
+      {children}
+    </button>
   );
 }
 
