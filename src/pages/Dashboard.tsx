@@ -215,7 +215,7 @@ const Dashboard = () => {
               <Link to="/points"><Trophy className="w-4 h-4 mr-1" />Points</Link>
             </Button>
             <Button size="sm" variant="ghost" asChild>
-              <Link to="/"><CardIcon className="w-4 h-4 mr-1" />Old Dashboard</Link>
+              <Link to="/cards"><CardIcon className="w-4 h-4 mr-1" />Old Dashboard</Link>
             </Button>
             <UserMenu userEmail={user?.email || ''} onSignOut={async () => { await signOut(); navigate('/auth'); }} />
           </div>
