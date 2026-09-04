@@ -30,6 +30,11 @@ const fmtDate = (iso: string | null) => {
   try { return format(parseISO(iso), 'MMM d, yyyy'); } catch { return iso; }
 };
 
+const fmtDateTime = (iso: string | null) => {
+  if (!iso) return '—';
+  try { return format(parseISO(iso), 'MMM d, h:mm a'); } catch { return iso; }
+};
+
 // Resolve a card's next due date. Prefer the synced explicit date, but only if
 // it is today or in the future — a stale past date (common right after a
 // statement is paid) is rolled forward to the next occurrence of the due day so
@@ -231,7 +236,7 @@ const Dashboard = () => {
           <div className="flex items-center gap-3">
             {lastSyncedAt && (
               <span className="text-xs text-muted-foreground flex items-center gap-1">
-                <RefreshCw className="w-3 h-3" /> Synced {fmtDate(lastSyncedAt)}
+                <RefreshCw className="w-3 h-3" /> Synced {fmtDateTime(lastSyncedAt)}
               </span>
             )}
             {companies.length > 0 && (

@@ -263,9 +263,13 @@ export function useFinanceData() {
     snapshots: snapshotsQuery.data ?? [],
     loading: accountsQuery.isLoading || transactionsQuery.isLoading || cardsQuery.isLoading,
     error: accountsQuery.error || transactionsQuery.error || cardsQuery.error,
-    lastSyncedAt: (cardsQuery.data ?? []).reduce<string | null>((latest, c) => {
-      if (!c.syncedAt) return latest;
-      return !latest || c.syncedAt > latest ? c.syncedAt : latest;
+    // Most recent sync across cards (finance_synced_at) and accounts (updated_at).
+    lastSyncedAt: [
+      ...(cardsQuery.data ?? []).map((c) => c.syncedAt),
+      ...(accountsQuery.data ?? []).map((a) => a.updatedAt),
+    ].reduce<string | null>((latest, ts) => {
+      if (!ts) return latest;
+      return !latest || ts > latest ? ts : latest;
     }, null),
   };
 }
