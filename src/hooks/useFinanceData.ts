@@ -136,13 +136,21 @@ export function useFinanceData() {
     queryKey: ['finance', 'transactions', user?.id],
     enabled: !!user,
     queryFn: async (): Promise<FinanceTransaction[]> => {
-      const { data, error } = await db
-        .from('transactions')
-        .select('*')
-        .order('transaction_date', { ascending: false })
-        .limit(5000);
-      if (error) throw error;
-      return (data ?? []).map((t: any) => ({
+      // Supabase/PostgREST caps each request at 1000 rows, so page through
+      // until a short page comes back to load the full history.
+      const pageSize = 1000;
+      const rows: any[] = [];
+      for (let offset = 0; offset < 100000; offset += pageSize) {
+        const { data, error } = await db
+          .from('transactions')
+          .select('*')
+          .order('transaction_date', { ascending: false })
+          .range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        rows.push(...(data ?? []));
+        if (!data || data.length < pageSize) break;
+      }
+      return rows.map((t: any) => ({
         id: t.id,
         accountId: t.account_id ?? null,
         creditCardId: t.credit_card_id ?? null,

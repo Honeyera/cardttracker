@@ -119,6 +119,7 @@ const Dashboard = () => {
   const [company, setCompany] = useState('all');
   const [selectedCard, setSelectedCard] = useState<FinanceCard | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<FinanceAccount | null>(null);
+  const [activityPeriod, setActivityPeriod] = useState<'month' | '30d' | '90d' | 'all'>('month');
 
   useEffect(() => {
     if (!authLoading && !user) navigate('/auth');
@@ -157,10 +158,18 @@ const Dashboard = () => {
   }, [visibleCards]);
   const dueSoonTotal = dueSoon.reduce((s, x) => s + x.card.currentBalance, 0);
 
-  // ── Activity roll-up (whatever period the synced data spans) ────────
-  const income = transactions.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const spend = transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-  const payments = transactions.filter((t) => t.type === 'payment');
+  // ── Activity roll-up, scoped to a selected period ──────────────────
+  const activityFrom = activityPeriod === 'month' ? isoMonthStart()
+    : activityPeriod === '30d' ? isoDaysAgo(30)
+    : activityPeriod === '90d' ? isoDaysAgo(90) : '';
+  const activityTxns = useMemo(
+    () => transactions.filter((t) => !activityFrom || t.date >= activityFrom),
+    [transactions, activityFrom],
+  );
+  // Income counts deposits + refunds; spending counts purchases + fees.
+  const income = activityTxns.filter((t) => t.type === 'income' || t.type === 'refund').reduce((s, t) => s + t.amount, 0);
+  const spend = activityTxns.filter((t) => t.type === 'expense' || t.type === 'fee').reduce((s, t) => s + t.amount, 0);
+  const payments = activityTxns.filter((t) => t.type === 'payment');
   const paymentsTotal = payments.reduce((s, t) => s + t.amount, 0);
 
   const cardName = (id: string | null) =>
@@ -391,7 +400,15 @@ const Dashboard = () => {
 
             {/* Activity summary */}
             <div className="bg-card rounded-2xl border border-border p-5">
-              <SectionTitle icon={TrendingUp}>Activity</SectionTitle>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <SectionTitle icon={TrendingUp}>Activity</SectionTitle>
+                <div className="flex items-center gap-1">
+                  <RangeChip onClick={() => setActivityPeriod('month')} active={activityPeriod === 'month'}>This Month</RangeChip>
+                  <RangeChip onClick={() => setActivityPeriod('30d')} active={activityPeriod === '30d'}>30d</RangeChip>
+                  <RangeChip onClick={() => setActivityPeriod('90d')} active={activityPeriod === '90d'}>90d</RangeChip>
+                  <RangeChip onClick={() => setActivityPeriod('all')} active={activityPeriod === 'all'}>All</RangeChip>
+                </div>
+              </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mt-3">
                 <Flow label="Income" value={income} icon={ArrowDownRight} tone="success" />
                 <Flow label="Spending" value={spend} icon={ArrowUpRight} tone="warning" />
