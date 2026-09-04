@@ -85,6 +85,13 @@ export interface ForecastPoint {
   projectedNet: number;
 }
 
+export interface BalanceSnapshot {
+  accountId: string;
+  date: string; // YYYY-MM-DD
+  currentBalance: number;
+  availableBalance: number;
+}
+
 const num = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -222,12 +229,31 @@ export function useFinanceData() {
     },
   });
 
+  const snapshotsQuery = useQuery({
+    queryKey: ['finance', 'snapshots', user?.id],
+    enabled: !!user,
+    queryFn: async (): Promise<BalanceSnapshot[]> => {
+      const { data, error } = await db
+        .from('balance_snapshots')
+        .select('account_id, snapshot_date, current_balance, available_balance')
+        .order('snapshot_date', { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map((s: any) => ({
+        accountId: s.account_id,
+        date: s.snapshot_date,
+        currentBalance: num(s.current_balance),
+        availableBalance: num(s.available_balance),
+      }));
+    },
+  });
+
   return {
     accounts: accountsQuery.data ?? [],
     transactions: transactionsQuery.data ?? [],
     cards: cardsQuery.data ?? [],
     alerts: alertsQuery.data ?? [],
     forecast: forecastQuery.data ?? [],
+    snapshots: snapshotsQuery.data ?? [],
     loading: accountsQuery.isLoading || transactionsQuery.isLoading || cardsQuery.isLoading,
     error: accountsQuery.error || transactionsQuery.error || cardsQuery.error,
     lastSyncedAt: (cardsQuery.data ?? []).reduce<string | null>((latest, c) => {

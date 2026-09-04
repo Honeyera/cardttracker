@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { format, parseISO, differenceInCalendarDays } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
-import { useFinanceData, FinanceAccount, FinanceCard, FinanceTransaction, FinanceAlert, ForecastPoint } from '@/hooks/useFinanceData';
+import { useFinanceData, FinanceAccount, FinanceCard, FinanceTransaction, FinanceAlert, ForecastPoint, BalanceSnapshot } from '@/hooks/useFinanceData';
 import { getNextOccurrence } from '@/utils/dateUtils';
 import { cardColorClasses, CardColor } from '@/types/creditCard';
 import { UserMenu } from '@/components/UserMenu';
@@ -110,9 +110,10 @@ function urgencyRank(card: FinanceCard): number {
 const Dashboard = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
-  const { accounts, transactions, cards, alerts, forecast, loading, lastSyncedAt } = useFinanceData();
+  const { accounts, transactions, cards, alerts, forecast, snapshots, loading, lastSyncedAt } = useFinanceData();
   const [company, setCompany] = useState('all');
   const [selectedCard, setSelectedCard] = useState<FinanceCard | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<FinanceAccount | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) navigate('/auth');
@@ -331,7 +332,11 @@ const Dashboard = () => {
                 <div className="bg-card rounded-2xl border border-border p-5"><Empty>No bank accounts synced yet.</Empty></div>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {depository.map((a) => <AccountTile key={a.id} account={a} />)}
+                  {depository.map((a) => (
+                    <AccountTile key={a.id} account={a}
+                      history={snapshots.filter((s) => s.accountId === a.id)}
+                      onClick={() => setSelectedAccount(a)} />
+                  ))}
                 </div>
               )}
             </div>
@@ -428,6 +433,13 @@ const Dashboard = () => {
         transactions={selectedCard ? transactions.filter((t) => t.creditCardId === selectedCard.id) : []}
         onClose={() => setSelectedCard(null)}
       />
+
+      <AccountDetailDialog
+        account={selectedAccount}
+        transactions={selectedAccount ? transactions.filter((t) => t.accountId === selectedAccount.id) : []}
+        history={selectedAccount ? snapshots.filter((s) => s.accountId === selectedAccount.id) : []}
+        onClose={() => setSelectedAccount(null)}
+      />
     </div>
   );
 };
@@ -474,14 +486,17 @@ const Empty = ({ children }: { children: React.ReactNode }) => (
   <p className="text-sm text-muted-foreground py-6 text-center">{children}</p>
 );
 
-function AccountTile({ account }: { account: FinanceAccount }) {
+function AccountTile({ account, history, onClick }: {
+  account: FinanceAccount; history: BalanceSnapshot[]; onClick?: () => void;
+}) {
   return (
-    <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
+    <button type="button" onClick={onClick}
+      className="bg-card rounded-2xl border border-border p-5 shadow-sm text-left w-full hover:border-primary/40 hover:shadow-md transition-all">
       <div className="flex items-center gap-3 mb-3">
         <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
           <Landmark className="w-5 h-5" />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="font-semibold truncate">{account.name}</p>
           <p className="text-xs text-muted-foreground truncate">
             {account.institution ?? 'Bank'}
@@ -489,12 +504,91 @@ function AccountTile({ account }: { account: FinanceAccount }) {
             {' · '}{account.accountType}
           </p>
         </div>
+        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
       </div>
       <p className="text-3xl font-bold text-card-foreground">{fmtMoney(account.currentBalance, { cents: true })}</p>
-      {account.availableBalance !== account.currentBalance && (
-        <p className="text-xs text-muted-foreground mt-1">{fmtMoney(account.availableBalance, { cents: true })} available</p>
-      )}
+      <div className="flex items-center justify-between mt-1">
+        <p className="text-xs text-muted-foreground">
+          {fmtMoney(account.availableBalance, { cents: true })} available
+        </p>
+        {history.length > 1 && <Sparkline data={history} />}
+      </div>
+    </button>
+  );
+}
+
+function Sparkline({ data }: { data: BalanceSnapshot[] }) {
+  return (
+    <div className="w-24 h-8">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="spark" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <Area type="monotone" dataKey="currentBalance" stroke="hsl(var(--primary))" strokeWidth={1.5} fill="url(#spark)" />
+        </AreaChart>
+      </ResponsiveContainer>
     </div>
+  );
+}
+
+function AccountDetailDialog({ account, transactions, history, onClose }: {
+  account: FinanceAccount | null; transactions: FinanceTransaction[]; history: BalanceSnapshot[]; onClose: () => void;
+}) {
+  const open = account != null;
+  const chartData = history.map((s) => ({ ...s, label: format(parseISO(s.date), 'MMM d') }));
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        {account && (
+          <>
+            <DialogHeader>
+              <DialogTitle>
+                {account.name}{' '}
+                <span className="text-muted-foreground font-normal">
+                  {account.institution}{account.lastFour ? ` •••• ${account.lastFour}` : ''}
+                </span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <Field label="Current Balance">{fmtMoney(account.currentBalance, { cents: true })}</Field>
+              <Field label="Available Balance">{fmtMoney(account.availableBalance, { cents: true })}</Field>
+              <Field label="Type">{account.accountType}{account.accountSubtype ? ` · ${account.accountSubtype}` : ''}</Field>
+              <Field label="Last Updated">{account.updatedAt ? fmtDate(account.updatedAt) : '—'}</Field>
+            </div>
+
+            {chartData.length > 1 && (
+              <div className="mt-2">
+                <p className="text-sm font-semibold mb-2">Balance History</p>
+                <div className="h-40 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="acctFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                          <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" minTickGap={24} />
+                      <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" width={56}
+                        tickFormatter={(v) => `$${Math.round(Number(v) / 1000)}k`} />
+                      <Tooltip formatter={(v: number) => [fmtMoney(Number(v), { cents: true }), 'Balance']}
+                        contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 12, fontSize: 12 }} />
+                      <Area type="monotone" dataKey="currentBalance" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#acctFill)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            <TransactionsPanel transactions={transactions} resetKey={account.id} />
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -656,24 +750,58 @@ function isoMonthStart(): string {
   const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
 }
 
-function CardDetailDialog({ card, transactions, onClose }: {
-  card: FinanceCard | null; transactions: FinanceTransaction[]; onClose: () => void;
-}) {
-  const open = card != null;
-  const due = card ? resolveDue(card) : null;
+function TransactionsPanel({ transactions, resetKey }: { transactions: FinanceTransaction[]; resetKey: string }) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-
-  // Reset the range whenever a different card is opened.
-  useEffect(() => { setFrom(''); setTo(''); }, [card?.id]);
+  useEffect(() => { setFrom(''); setTo(''); }, [resetKey]);
 
   const filtered = useMemo(
     () => transactions.filter((t) => (!from || t.date >= from) && (!to || t.date <= to)),
     [transactions, from, to],
   );
   const rangeSpend = filtered.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-
   const preset = (f: string, t = '') => { setFrom(f); setTo(t); };
+
+  return (
+    <div className="mt-2">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm font-semibold">Activity</p>
+        <span className="text-xs text-muted-foreground">
+          {filtered.length} of {transactions.length}
+          {rangeSpend > 0 && <span> · {fmtMoney(rangeSpend, { cents: true })} spent</span>}
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
+          className="h-8 rounded-md border border-border bg-background px-2 text-xs" />
+        <span className="text-xs text-muted-foreground">to</span>
+        <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
+          className="h-8 rounded-md border border-border bg-background px-2 text-xs" />
+        <div className="flex items-center gap-1 ml-auto">
+          <RangeChip onClick={() => preset(isoDaysAgo(30))} active={from === isoDaysAgo(30) && !to}>30d</RangeChip>
+          <RangeChip onClick={() => preset(isoDaysAgo(90))} active={from === isoDaysAgo(90) && !to}>90d</RangeChip>
+          <RangeChip onClick={() => preset(isoMonthStart())} active={from === isoMonthStart() && !to}>Month</RangeChip>
+          <RangeChip onClick={() => preset('', '')} active={!from && !to}>All</RangeChip>
+        </div>
+      </div>
+      {transactions.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-4 text-center">No transactions synced yet.</p>
+      ) : filtered.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-4 text-center">No transactions in this date range.</p>
+      ) : (
+        <div className="space-y-1">
+          {filtered.map((t) => <TxnRow key={t.id} txn={t} cardName={null} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CardDetailDialog({ card, transactions, onClose }: {
+  card: FinanceCard | null; transactions: FinanceTransaction[]; onClose: () => void;
+}) {
+  const open = card != null;
+  const due = card ? resolveDue(card) : null;
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
@@ -697,40 +825,7 @@ function CardDetailDialog({ card, transactions, onClose }: {
               <Field label="Purchase APR">{card.purchaseApr ? `${card.purchaseApr}%` : '—'}</Field>
               <Field label="Company">{card.companyName ?? '—'}</Field>
             </div>
-            <div className="mt-2">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-semibold">Activity</p>
-                <span className="text-xs text-muted-foreground">
-                  {filtered.length} of {transactions.length}
-                  {rangeSpend > 0 && <span> · {fmtMoney(rangeSpend, { cents: true })} spent</span>}
-                </span>
-              </div>
-
-              {/* Date range filter */}
-              <div className="flex flex-wrap items-center gap-2 mb-3">
-                <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
-                  className="h-8 rounded-md border border-border bg-background px-2 text-xs" />
-                <span className="text-xs text-muted-foreground">to</span>
-                <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
-                  className="h-8 rounded-md border border-border bg-background px-2 text-xs" />
-                <div className="flex items-center gap-1 ml-auto">
-                  <RangeChip onClick={() => preset(isoDaysAgo(30))} active={from === isoDaysAgo(30) && !to}>30d</RangeChip>
-                  <RangeChip onClick={() => preset(isoDaysAgo(90))} active={from === isoDaysAgo(90) && !to}>90d</RangeChip>
-                  <RangeChip onClick={() => preset(isoMonthStart())} active={from === isoMonthStart() && !to}>Month</RangeChip>
-                  <RangeChip onClick={() => preset('', '')} active={!from && !to}>All</RangeChip>
-                </div>
-              </div>
-
-              {transactions.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">No transactions synced for this card yet.</p>
-              ) : filtered.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">No transactions in this date range.</p>
-              ) : (
-                <div className="space-y-1">
-                  {filtered.map((t) => <TxnRow key={t.id} txn={t} cardName={null} />)}
-                </div>
-              )}
-            </div>
+            <TransactionsPanel transactions={transactions} resetKey={card.id} />
           </>
         )}
       </DialogContent>
