@@ -97,6 +97,13 @@ const num = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
+// Friendly display-name overrides for accounts, keyed by Plaid external_id.
+// The finance sync overwrites the `name` column from the bank on every sync,
+// so custom names are applied here at read time instead of in the database.
+const ACCOUNT_NAME_OVERRIDES: Record<string, string> = {
+  roAONO3dpahMjvOX836EFKZxk113M3uarB76D: 'TidyTeds Account', // Chase BUS COMPLETE CHK ••3609
+};
+
 export function useFinanceData() {
   const { user } = useAuth();
 
@@ -111,7 +118,7 @@ export function useFinanceData() {
       if (error) throw error;
       return (data ?? []).map((a: any) => ({
         id: a.id,
-        name: a.name,
+        name: ACCOUNT_NAME_OVERRIDES[a.external_id] ?? a.name,
         institution: a.institution_name ?? null,
         accountType: a.account_type,
         accountSubtype: a.account_subtype ?? null,
