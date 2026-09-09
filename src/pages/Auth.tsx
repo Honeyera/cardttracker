@@ -5,9 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Wallet, Mail, Lock, Loader2 } from 'lucide-react';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { Wallet, Mail, Lock, Loader2, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { mfaLogin, mfaVerify } from '@/lib/mfa';
 import { z } from 'zod';
 
 const authSchema = z.object({
@@ -21,6 +23,11 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
+  // Email-2FA step: once a code has been mailed, we hold the challenge id and
+  // the entered password (needed again to mint the session on verify).
+  const [mfaChallenge, setMfaChallenge] = useState<{ challengeId: string; password: string } | null>(null);
+  const [otp, setOtp] = useState('');
+  const [verifying, setVerifying] = useState(false);
   const { signIn, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
@@ -42,21 +49,46 @@ const Auth = () => {
     }
 
     setLoading(true);
-    
+
     try {
-      const { error } = await signIn(email, password);
-      if (error) {
-        if (error.message.includes('Invalid login credentials')) {
-          toast.error('Invalid email or password');
-        } else {
-          toast.error(error.message);
-        }
+      const result = await mfaLogin(email, password);
+      if (result.status === 'mfa_required') {
+        setMfaChallenge({ challengeId: result.challengeId, password });
+        setOtp('');
+        toast.success('We emailed you a 6-digit sign-in code.');
+      } else if (result.status === 'authenticated') {
+        // No 2FA for this user — apply the session the function returned.
+        await supabase.auth.setSession(result.session);
+        toast.success('Welcome back!');
+        navigate('/');
       } else {
+        // Bootstrap: the mfa function isn't deployed yet — sign in directly.
+        const { error } = await signIn(email, password);
+        if (error) throw error;
         toast.success('Welcome back!');
         navigate('/');
       }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Sign in failed';
+      toast.error(msg.includes('Invalid login credentials') ? 'Invalid email or password' : msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (code: string) => {
+    if (!mfaChallenge) return;
+    setVerifying(true);
+    try {
+      const session = await mfaVerify(email, mfaChallenge.password, mfaChallenge.challengeId, code);
+      await supabase.auth.setSession(session);
+      toast.success('Welcome back!');
+      navigate('/');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Invalid code');
+      setOtp('');
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -81,7 +113,43 @@ const Auth = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {showForgotPassword ? (
+          {mfaChallenge ? (
+            <div className="space-y-4">
+              <div className="flex flex-col items-center text-center gap-2">
+                <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Enter the 6-digit code we sent to<br /><span className="font-medium text-foreground">{email}</span>
+                </p>
+              </div>
+              <div className="flex justify-center">
+                <InputOTP
+                  maxLength={6}
+                  value={otp}
+                  onChange={(v) => {
+                    setOtp(v);
+                    if (v.length === 6) handleVerifyOtp(v);
+                  }}
+                  disabled={verifying}
+                >
+                  <InputOTPGroup>
+                    {[0, 1, 2, 3, 4, 5].map((i) => <InputOTPSlot key={i} index={i} />)}
+                  </InputOTPGroup>
+                </InputOTP>
+              </div>
+              <Button className="w-full" disabled={verifying || otp.length !== 6} onClick={() => handleVerifyOtp(otp)}>
+                {verifying && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                Verify &amp; Sign In
+              </Button>
+              <div className="text-center">
+                <button type="button" onClick={() => { setMfaChallenge(null); setOtp(''); }}
+                  className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                  <ArrowLeft className="w-3 h-3" /> Back to sign in
+                </button>
+              </div>
+            </div>
+          ) : showForgotPassword ? (
             <div className="space-y-4">
               <form onSubmit={async (e) => {
                 e.preventDefault();
