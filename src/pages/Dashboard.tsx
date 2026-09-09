@@ -632,104 +632,94 @@ function Flow({ label, value, icon: Icon, tone }: {
 
 function CardTile({ card, onClick }: { card: FinanceCard; onClick?: () => void }) {
   const due = resolveDue(card);
-
-  let status: { label: string; tone: Tone; icon: React.ComponentType<{ className?: string }> };
-  if (card.isOverdue) status = { label: 'Overdue', tone: 'danger', icon: AlertTriangle };
-  else if (isSettled(card)) status = { label: 'Paid / none due', tone: 'success', icon: CheckCircle2 };
-  else if (due && due.days <= 3) status = { label: due.days <= 0 ? 'Due today' : `Due in ${due.days}d`, tone: 'danger', icon: AlertTriangle };
-  else if (due && due.days <= 7) status = { label: `Due in ${due.days}d`, tone: 'warning', icon: CalendarClock };
-  else status = { label: due ? `Due in ${due.days}d` : 'No due date', tone: 'muted', icon: CalendarClock };
-
+  const settled = isSettled(card);
+  const risk = interestRisk(card);
   const gradient = cardColorClasses[(card.color as CardColor)] ?? cardColorClasses.navy;
   const utilization = card.creditLimit > 0 ? Math.min(1, card.totalBalance / card.creditLimit) : null;
-  const risk = interestRisk(card);
+
+  // Amount to pay now: the remaining statement balance. Fallbacks cover odd
+  // synced states (an overdue card can report a zero statement remainder).
+  const payAmount = card.currentBalance > 0.005
+    ? card.currentBalance
+    : (card.minimumPayment || card.lastStatementBalance || card.totalBalance);
+
+  // One status strip per tile: do I need to act, how much, by when.
+  let strip: { tone: Tone; icon: React.ComponentType<{ className?: string }>; text: string };
+  if (card.isOverdue) {
+    strip = { tone: 'danger', icon: AlertTriangle, text: `Overdue — pay ${fmtMoney(payAmount)} now` };
+  } else if (settled) {
+    strip = { tone: 'success', icon: CheckCircle2, text: 'Nothing due' };
+  } else if (due) {
+    const when = due.days <= 0 ? 'due today' : due.days === 1 ? 'in 1 day' : `in ${due.days} days`;
+    strip = {
+      tone: due.days <= 3 ? 'danger' : due.days <= 7 ? 'warning' : 'muted',
+      icon: due.days <= 3 ? AlertTriangle : CalendarClock,
+      text: `Pay ${fmtMoney(payAmount)} by ${format(due.date, 'MMM d')} · ${when}`,
+    };
+  } else {
+    strip = { tone: 'muted', icon: CalendarClock, text: 'No due date on file' };
+  }
+
+  const footerBits = [
+    card.lastStatementDate ? `Closed ${format(parseISO(card.lastStatementDate), 'MMM d')}` : null,
+    card.lastPaymentAmount != null
+      ? `Paid ${fmtMoney(card.lastPaymentAmount)}${card.lastPaymentDate ? ` on ${format(parseISO(card.lastPaymentDate), 'MMM d')}` : ''}`
+      : null,
+  ].filter(Boolean);
 
   return (
     <button type="button" onClick={onClick}
-      className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm flex flex-col text-left hover:border-primary/40 hover:shadow-md transition-all">
-      {/* Colored header strip */}
-      <div className={cn('bg-gradient-to-r px-4 py-3 text-white', gradient)}>
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="font-semibold leading-tight truncate">{card.name}</p>
-            <p className="text-xs text-white/80 truncate">
-              {card.lastFour ? `•••• ${card.lastFour}` : ''}{card.companyName ? ` · ${card.companyName}` : ''}
-            </p>
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
-            {risk && (
-              <span title={`Paid ${fmtMoney(risk.paid)} of ${fmtMoney(risk.statement)} statement — interest will accrue`}
-                className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/20 text-white">
-                <Percent className="w-3 h-3" />
-              </span>
-            )}
-            <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap bg-white/15 text-white')}>
-              <status.icon className="w-3 h-3" />{status.label}
-            </span>
-          </div>
-        </div>
+      className={cn(
+        'bg-card rounded-2xl border border-border overflow-hidden shadow-sm flex flex-col text-left hover:border-primary/40 hover:shadow-md transition-all',
+        card.isOverdue && 'ring-1 ring-destructive/40',
+      )}>
+      {/* Identity header — name, digits, company. Status lives in the strip below. */}
+      <div className={cn('bg-gradient-to-r px-4 py-2.5 text-white', gradient)}>
+        <p className="font-semibold leading-tight truncate">{card.name}</p>
+        <p className="text-xs text-white/80 truncate">
+          {card.lastFour ? `•••• ${card.lastFour}` : ''}{card.companyName ? ` · ${card.companyName}` : ''}
+        </p>
       </div>
 
-      {/* Body */}
+      {/* Status strip — tinted by state so overdue vs paid reads at a glance */}
+      <div className={cn('px-4 py-2 text-sm font-medium flex flex-col gap-1', toneBg[strip.tone])}>
+        <span className="flex items-center gap-1.5 min-w-0">
+          <strip.icon className="w-4 h-4 shrink-0" />
+          <span className="truncate">{strip.text}</span>
+        </span>
+        {risk && (
+          <span className="flex items-center gap-1.5 text-xs text-destructive min-w-0">
+            <Percent className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">Underpaid — {fmtMoney(risk.remaining)} accruing interest</span>
+          </span>
+        )}
+      </div>
+
+      {/* Body — one hero number, then standing */}
       <div className="p-4 flex flex-col gap-3 flex-1">
-        <div className="flex items-end justify-between">
-          <div>
-            <p className="text-xs text-muted-foreground">Total Balance</p>
-            <p className="text-2xl font-bold text-card-foreground">{fmtMoney(card.totalBalance, { cents: true })}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-muted-foreground">Last Statement</p>
-            <p className="font-semibold">
-              {card.lastStatementBalance != null ? fmtMoney(card.lastStatementBalance, { cents: true }) : fmtMoney(card.currentBalance, { cents: true })}
-            </p>
-            {(card.lastStatementBalance ?? 0) > 0.005 && isSettled(card) && (
-              <p className="text-[11px] text-success font-medium">paid</p>
-            )}
-          </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Balance</p>
+          <p className="text-2xl font-bold text-card-foreground">{fmtMoney(card.totalBalance)}</p>
         </div>
 
-        {/* Utilization */}
         {utilization != null && (
           <div>
-            <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-              <span>{fmtMoney(card.totalBalance)} of {fmtMoney(card.creditLimit)}</span>
-              <span>{Math.round(utilization * 100)}%</span>
-            </div>
-            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+            <div className="h-2 rounded-full bg-muted overflow-hidden">
               <div className={cn('h-full rounded-full',
                 utilization >= 0.9 ? 'bg-destructive' : utilization >= 0.5 ? 'bg-warning' : 'bg-success')}
                 style={{ width: `${Math.max(2, utilization * 100)}%` }} />
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {Math.round(utilization * 100)}% of {fmtMoney(card.creditLimit)} limit
+            </p>
           </div>
         )}
 
-        {risk && (
-          <div className="flex items-center gap-2 rounded-lg bg-destructive/10 text-destructive px-2.5 py-1.5 text-xs">
-            <Percent className="w-3.5 h-3.5 shrink-0" />
-            <span>Underpaid statement — {fmtMoney(risk.remaining)} may accrue interest</span>
-          </div>
-        )}
-
-        {/* Dates & amounts */}
-        <div className="grid grid-cols-2 gap-3 text-sm pt-1">
-          <Field label="Min Payment">
-            {card.minimumPayment ? fmtMoney(card.minimumPayment, { cents: true }) : '—'}
-          </Field>
-          <Field label="Due">
-            {due ? format(due.date, 'MMM d') : card.dueDay ? `Day ${card.dueDay}` : '—'}
-          </Field>
-          <Field label="Closes">
-            {card.lastStatementDate ? format(parseISO(card.lastStatementDate), 'MMM d')
-              : card.statementDay ? `Day ${card.statementDay}` : '—'}
-          </Field>
-          <Field label="Last Payment">
-            {card.lastPaymentAmount != null
-              ? <span>{fmtMoney(card.lastPaymentAmount)}{card.lastPaymentDate ? <span className="text-muted-foreground font-normal"> · {format(parseISO(card.lastPaymentDate), 'MMM d')}</span> : ''}</span>
-              : '—'}
-          </Field>
-        </div>
-        <div className="flex items-center gap-1 text-xs text-primary mt-auto pt-1">
-          View activity <ChevronRight className="w-3 h-3" />
+        <div className="flex items-center justify-between gap-2 mt-auto pt-1">
+          <p className="text-xs text-muted-foreground truncate">{footerBits.join(' · ')}</p>
+          <span className="flex items-center gap-1 text-xs text-primary shrink-0">
+            View activity <ChevronRight className="w-3 h-3" />
+          </span>
         </div>
       </div>
     </button>
