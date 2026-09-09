@@ -17,11 +17,8 @@ const authSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
-// Temporarily route login directly to Supabase (bypassing the mfa function)
-// while the server-side password path is being verified. Flip back to true once
-// the mfa function is confirmed to authenticate a real user end-to-end.
-// No user is enrolled yet, so this changes nothing for anyone.
-const MFA_LOGIN_ENABLED = false;
+// Route login through the mfa function (enforces email 2FA for enrolled users).
+const MFA_LOGIN_ENABLED = true;
 
 const Auth = () => {
   const [email, setEmail] = useState('');
