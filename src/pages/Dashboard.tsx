@@ -4,6 +4,7 @@ import { format, parseISO, differenceInCalendarDays } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFinanceData, FinanceAccount, FinanceCard, FinanceTransaction, FinanceAlert, ForecastPoint, BalanceSnapshot } from '@/hooks/useFinanceData';
 import { getNextOccurrence } from '@/utils/dateUtils';
+import { adSpendLimitFor, computeAdSpend, isAdTransaction, AdSpendStatus } from '@/utils/adSpend';
 import { cardColorClasses, CardColor } from '@/types/creditCard';
 import { UserMenu } from '@/components/UserMenu';
 import { Button } from '@/components/ui/button';
@@ -14,7 +15,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceD
 import {
   Wallet, LayoutDashboard, CreditCard as CardIcon, Trophy, Loader2, Building2,
   ArrowDownRight, ArrowUpRight, Landmark, TrendingUp, TrendingDown, AlertTriangle,
-  CheckCircle2, CalendarClock, RefreshCw, Bell, ChevronRight, Percent,
+  CheckCircle2, CalendarClock, RefreshCw, Bell, ChevronRight, Percent, Megaphone,
 } from 'lucide-react';
 
 const fmtMoney = (n: number, opts: { cents?: boolean } = {}) =>
@@ -193,6 +194,25 @@ const Dashboard = () => {
     [visibleCards],
   );
 
+  // Calendar-year ad spend, per card with a configured annual cap.
+  const adSpendByCard = useMemo(() => {
+    const map = new Map<string, AdSpendStatus>();
+    for (const c of cards) {
+      const limit = adSpendLimitFor(c);
+      if (limit) map.set(c.id, computeAdSpend(transactions, c.id, limit));
+    }
+    return map;
+  }, [cards, transactions]);
+
+  // Ad-spend caps ≥80% used surface in Needs Attention.
+  const adSpendWarnings = useMemo(
+    () => visibleCards
+      .map((c) => ({ card: c, ad: adSpendByCard.get(c.id) }))
+      .filter((x): x is { card: FinanceCard; ad: AdSpendStatus } => x.ad != null && x.ad.fraction >= 0.8)
+      .sort((a, b) => b.ad.fraction - a.ad.fraction),
+    [visibleCards, adSpendByCard],
+  );
+
   // Forecast: lowest projected balance point over the horizon.
   const lowestPoint = useMemo(() => {
     if (forecast.length === 0) return null;
@@ -270,7 +290,7 @@ const Dashboard = () => {
         ) : (
           <>
             {/* Needs Attention */}
-            {(attentionCards.length > 0 || openAlerts.length > 0 || interestRiskCards.length > 0) && (
+            {(attentionCards.length > 0 || openAlerts.length > 0 || interestRiskCards.length > 0 || adSpendWarnings.length > 0) && (
               <div className="rounded-2xl border border-warning/40 bg-warning/5 p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <Bell className="w-4 h-4 text-warning" />
@@ -311,6 +331,31 @@ const Dashboard = () => {
                       <span className="font-semibold whitespace-nowrap text-destructive">{fmtMoney(risk!.remaining)}</span>
                     </button>
                   ))}
+                  {adSpendWarnings.map(({ card, ad }) => {
+                    const over = ad.fraction >= 1;
+                    const tone = ad.fraction >= 0.9 ? 'text-destructive' : 'text-warning';
+                    return (
+                      <button key={`ad-${card.id}`} onClick={() => setSelectedCard(card)}
+                        className={cn('flex items-center justify-between gap-2 text-left rounded-lg bg-card border px-3 py-2 transition-colors',
+                          ad.fraction >= 0.9 ? 'border-destructive/30 hover:border-destructive/60' : 'border-border hover:border-warning/50')}>
+                        <div className="flex items-start gap-2 min-w-0">
+                          <Megaphone className={cn('w-4 h-4 mt-0.5 shrink-0', tone)} />
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">
+                              {card.name} <span className="text-muted-foreground font-normal">ad spend {Math.round(ad.fraction * 100)}% of cap</span>
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {fmtMoney(ad.spent)} of {fmtMoney(ad.limit)}
+                              {over ? ' — over the annual cap' : ` · on pace for ${fmtMoney(ad.projected)} by Dec 31`}
+                            </p>
+                          </div>
+                        </div>
+                        <span className={cn('font-semibold whitespace-nowrap', tone)}>
+                          {over ? `+${fmtMoney(ad.spent - ad.limit)}` : `${fmtMoney(ad.limit - ad.spent)} left`}
+                        </span>
+                      </button>
+                    );
+                  })}
                   {openAlerts.map((a) => (
                     <div key={a.id} className="flex items-start gap-2 rounded-lg bg-card border border-border px-3 py-2">
                       <AlertTriangle className={cn('w-4 h-4 mt-0.5 shrink-0',
@@ -393,7 +438,9 @@ const Dashboard = () => {
                 <Empty>No cards to show.</Empty>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {visibleCards.map((c) => <CardTile key={c.id} card={c} onClick={() => setSelectedCard(c)} />)}
+                  {visibleCards.map((c) => (
+                    <CardTile key={c.id} card={c} adSpend={adSpendByCard.get(c.id)} onClick={() => setSelectedCard(c)} />
+                  ))}
                 </div>
               )}
             </div>
@@ -455,6 +502,7 @@ const Dashboard = () => {
 
       <CardDetailDialog
         card={selectedCard}
+        adSpend={selectedCard ? adSpendByCard.get(selectedCard.id) : undefined}
         transactions={selectedCard ? transactions.filter((t) => t.creditCardId === selectedCard.id) : []}
         onClose={() => setSelectedCard(null)}
       />
@@ -630,7 +678,7 @@ function Flow({ label, value, icon: Icon, tone }: {
   );
 }
 
-function CardTile({ card, onClick }: { card: FinanceCard; onClick?: () => void }) {
+function CardTile({ card, adSpend, onClick }: { card: FinanceCard; adSpend?: AdSpendStatus; onClick?: () => void }) {
   const due = resolveDue(card);
   const settled = isSettled(card);
   const risk = interestRisk(card);
@@ -715,6 +763,21 @@ function CardTile({ card, onClick }: { card: FinanceCard; onClick?: () => void }
           </div>
         )}
 
+        {/* Annual ad-spend cap meter (only cards with a configured limit) */}
+        {adSpend && (
+          <div>
+            <div className="h-2 rounded-full bg-muted overflow-hidden">
+              <div className={cn('h-full rounded-full',
+                adSpend.fraction >= 0.9 ? 'bg-destructive' : adSpend.fraction >= 0.8 ? 'bg-warning' : 'bg-primary')}
+                style={{ width: `${Math.min(100, Math.max(2, adSpend.fraction * 100))}%` }} />
+            </div>
+            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+              <Megaphone className="w-3 h-3 shrink-0" />
+              Ad spend: {fmtMoney(adSpend.spent)} of {fmtMoney(adSpend.limit)} ({Math.round(adSpend.fraction * 100)}%)
+            </p>
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-2 mt-auto pt-1">
           <p className="text-xs text-muted-foreground truncate">{footerBits.join(' · ')}</p>
           <span className="flex items-center gap-1 text-xs text-primary shrink-0">
@@ -765,11 +828,13 @@ function isoMonthStart(): string {
   const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
 }
 
-type Flow = 'all' | 'in' | 'out';
+type Flow = 'all' | 'in' | 'out' | 'ads';
 const isMoneyIn = (t: FinanceTransaction) => t.type === 'income';
 const isMoneyOut = (t: FinanceTransaction) => t.type === 'expense' || t.type === 'payment';
 
-function TransactionsPanel({ transactions, resetKey }: { transactions: FinanceTransaction[]; resetKey: string }) {
+function TransactionsPanel({ transactions, resetKey, showAdsFilter }: {
+  transactions: FinanceTransaction[]; resetKey: string; showAdsFilter?: boolean;
+}) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [flow, setFlow] = useState<Flow>('all');
@@ -778,7 +843,8 @@ function TransactionsPanel({ transactions, resetKey }: { transactions: FinanceTr
   const filtered = useMemo(
     () => transactions.filter((t) =>
       (!from || t.date >= from) && (!to || t.date <= to) &&
-      (flow === 'all' || (flow === 'in' ? isMoneyIn(t) : isMoneyOut(t)))),
+      (flow === 'all' || (flow === 'ads' ? isAdTransaction(t)
+        : flow === 'in' ? isMoneyIn(t) : isMoneyOut(t)))),
     [transactions, from, to, flow],
   );
   const totalIn = filtered.filter(isMoneyIn).reduce((s, t) => s + t.amount, 0);
@@ -801,6 +867,7 @@ function TransactionsPanel({ transactions, resetKey }: { transactions: FinanceTr
         <RangeChip onClick={() => setFlow('all')} active={flow === 'all'}>All</RangeChip>
         <RangeChip onClick={() => setFlow('in')} active={flow === 'in'}>Money In</RangeChip>
         <RangeChip onClick={() => setFlow('out')} active={flow === 'out'}>Money Out</RangeChip>
+        {showAdsFilter && <RangeChip onClick={() => setFlow('ads')} active={flow === 'ads'}>Ads</RangeChip>}
       </div>
 
       <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -829,8 +896,8 @@ function TransactionsPanel({ transactions, resetKey }: { transactions: FinanceTr
   );
 }
 
-function CardDetailDialog({ card, transactions, onClose }: {
-  card: FinanceCard | null; transactions: FinanceTransaction[]; onClose: () => void;
+function CardDetailDialog({ card, adSpend, transactions, onClose }: {
+  card: FinanceCard | null; adSpend?: AdSpendStatus; transactions: FinanceTransaction[]; onClose: () => void;
 }) {
   const open = card != null;
   const due = card ? resolveDue(card) : null;
@@ -856,8 +923,21 @@ function CardDetailDialog({ card, transactions, onClose }: {
               <Field label="Paid On">{card.lastPaymentDate ? fmtDate(card.lastPaymentDate) : '—'}</Field>
               <Field label="Purchase APR">{card.purchaseApr ? `${card.purchaseApr}%` : '—'}</Field>
               <Field label="Company">{card.companyName ?? '—'}</Field>
+              {adSpend && (
+                <>
+                  <Field label={`Ad Spend (${adSpend.year})`}>
+                    {fmtMoney(adSpend.spent, { cents: true })}
+                    <span className="text-muted-foreground font-normal"> · {Math.round(adSpend.fraction * 100)}% of {fmtMoney(adSpend.limit)} cap</span>
+                  </Field>
+                  <Field label="Projected by Dec 31">
+                    <span className={adSpend.projected > adSpend.limit ? 'text-destructive' : undefined}>
+                      {fmtMoney(adSpend.projected)}
+                    </span>
+                  </Field>
+                </>
+              )}
             </div>
-            <TransactionsPanel transactions={transactions} resetKey={card.id} />
+            <TransactionsPanel transactions={transactions} resetKey={card.id} showAdsFilter={adSpend != null} />
           </>
         )}
       </DialogContent>

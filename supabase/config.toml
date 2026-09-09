@@ -17,3 +17,7 @@ verify_jwt = false
 
 [functions.send-points-email]
 verify_jwt = false
+
+# Called by pg_cron, not a logged-in user; authenticates via CRON_SECRET header.
+[functions.ad-spend-alert]
+verify_jwt = false
