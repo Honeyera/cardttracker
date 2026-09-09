@@ -68,7 +68,10 @@ async function sendCodeEmail(to: string, code: string, purpose: string) {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: "CardTrack <onboarding@resend.dev>",
+      // Verified-domain sender (same as send-points-email). The Resend sandbox
+      // sender onboarding@resend.dev only delivers to the account owner, so it
+      // silently fails for other household members — don't use it here.
+      from: "CardTrack <cardtrack@honeyera.com>",
       to: [to],
       subject: `${code} — ${title}`,
       html: `<div style="font-family:sans-serif;max-width:420px;margin:0 auto;padding:24px;text-align:center;">
