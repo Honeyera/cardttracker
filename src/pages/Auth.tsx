@@ -27,6 +27,7 @@ const Auth = () => {
   // the entered password (needed again to mint the session on verify).
   const [mfaChallenge, setMfaChallenge] = useState<{ challengeId: string; password: string } | null>(null);
   const [otp, setOtp] = useState('');
+  const [rememberDevice, setRememberDevice] = useState(true);
   const [verifying, setVerifying] = useState(false);
   const { signIn, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -80,7 +81,7 @@ const Auth = () => {
     if (!mfaChallenge) return;
     setVerifying(true);
     try {
-      const session = await mfaVerify(email, mfaChallenge.password, mfaChallenge.challengeId, code);
+      const session = await mfaVerify(email, mfaChallenge.password, mfaChallenge.challengeId, code, rememberDevice);
       await supabase.auth.setSession(session);
       toast.success('Welcome back!');
       navigate('/');
@@ -138,6 +139,11 @@ const Auth = () => {
                   </InputOTPGroup>
                 </InputOTP>
               </div>
+              <label className="flex items-center justify-center gap-2 text-sm text-muted-foreground cursor-pointer">
+                <input type="checkbox" className="rounded border-input"
+                  checked={rememberDevice} onChange={(e) => setRememberDevice(e.target.checked)} disabled={verifying} />
+                Trust this device for 30 days
+              </label>
               <Button className="w-full" disabled={verifying || otp.length !== 6} onClick={() => handleVerifyOtp(otp)}>
                 {verifying && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                 Verify &amp; Sign In

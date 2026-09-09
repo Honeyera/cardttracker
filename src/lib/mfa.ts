@@ -9,6 +9,14 @@ export type LoginResult =
   | { status: 'mfa_required'; challengeId: string }
   | { status: 'fallback' }; // function not deployed — caller signs in directly
 
+// Per-email trusted-device token, kept in localStorage so a remembered browser
+// skips the code next time. Keyed by email so multiple household users on one
+// browser don't clobber each other.
+const deviceKey = (email: string) => `mfa_device:${email.toLowerCase()}`;
+export const getDeviceToken = (email: string) => localStorage.getItem(deviceKey(email)) ?? '';
+export const setDeviceToken = (email: string, token: string) => localStorage.setItem(deviceKey(email), token);
+export const clearDeviceToken = (email: string) => localStorage.removeItem(deviceKey(email));
+
 async function callMfa(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke('mfa', { body });
   if (error) {
@@ -33,7 +41,7 @@ async function functionMissing(err: unknown): Promise<boolean> {
 
 export async function mfaLogin(email: string, password: string): Promise<LoginResult> {
   try {
-    const data = await callMfa({ action: 'login', email, password });
+    const data = await callMfa({ action: 'login', email, password, deviceToken: getDeviceToken(email) });
     if (data.status === 'mfa_required') return { status: 'mfa_required', challengeId: String(data.challengeId) };
     return { status: 'authenticated', session: data.session as SessionTokens };
   } catch (err) {
@@ -42,9 +50,20 @@ export async function mfaLogin(email: string, password: string): Promise<LoginRe
   }
 }
 
-export async function mfaVerify(email: string, password: string, challengeId: string, code: string): Promise<SessionTokens> {
-  const data = await callMfa({ action: 'verify', email, password, challengeId, code });
+export async function mfaVerify(
+  email: string, password: string, challengeId: string, code: string, remember: boolean,
+): Promise<SessionTokens> {
+  const data = await callMfa({
+    action: 'verify', email, password, challengeId, code,
+    remember, deviceLabel: navigator.userAgent,
+  });
+  // If we asked to be remembered, persist the returned device token.
+  if (remember && data.deviceToken) setDeviceToken(email, String(data.deviceToken));
   return data.session as SessionTokens;
+}
+
+export async function mfaForgetDevices(): Promise<void> {
+  await callMfa({ action: 'forget-devices' });
 }
 
 export async function mfaEnrollSend(): Promise<string> {

@@ -46,6 +46,23 @@ create table if not exists public.mfa_challenges (
 alter table public.mfa_challenges enable row level security;
 -- (no policies → closed to all client roles; service role bypasses RLS)
 
+-- Remembered ("trusted") devices. After a code is verified, the browser gets a
+-- random token; while a matching, unexpired row exists here, that device skips
+-- the code (password is still required). Only the token HASH is stored.
+create table if not exists public.trusted_devices (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  token_hash text not null,
+  label text,                              -- e.g. browser/OS, for the user's reference
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  last_used_at timestamptz not null default now()
+);
+create index if not exists trusted_devices_user_idx on public.trusted_devices(user_id);
+
+alter table public.trusted_devices enable row level security;
+-- (service-role only, like mfa_challenges)
+
 -- Optional hygiene: drop expired challenges. Safe to run anytime; or schedule.
 -- delete from public.mfa_challenges where expires_at < now();
 

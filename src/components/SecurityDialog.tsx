@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
-import { ShieldCheck, ShieldOff, Loader2 } from 'lucide-react';
+import { ShieldCheck, ShieldOff, Loader2, MonitorSmartphone } from 'lucide-react';
 import { toast } from 'sonner';
-import { mfaIsEnabled, mfaEnrollSend, mfaEnrollConfirm, mfaDisable } from '@/lib/mfa';
+import { mfaIsEnabled, mfaEnrollSend, mfaEnrollConfirm, mfaDisable, mfaForgetDevices } from '@/lib/mfa';
 
 interface SecurityDialogProps {
   open: boolean;
@@ -69,6 +69,18 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
     }
   };
 
+  const forgetDevices = async () => {
+    setBusy(true);
+    try {
+      await mfaForgetDevices();
+      toast.success('Trusted devices cleared — every device will need a code next sign-in.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not clear devices');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -105,8 +117,11 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
         ) : enabled ? (
           <div className="space-y-4 py-2">
             <div className="flex items-center gap-2 rounded-lg bg-success/10 text-success px-3 py-2 text-sm">
-              <ShieldCheck className="w-4 h-4 shrink-0" /> Email two-factor is <b>on</b> for your account.
+              <ShieldCheck className="w-4 h-4 shrink-0" /> Email two-factor is <b>on</b>. Trusted devices skip the code for 30 days.
             </div>
+            <Button variant="outline" className="w-full" disabled={busy} onClick={forgetDevices}>
+              <MonitorSmartphone className="w-4 h-4 mr-2" /> Forget trusted devices
+            </Button>
             <Button variant="outline" className="w-full text-destructive hover:text-destructive"
               disabled={busy} onClick={disable}>
               {busy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldOff className="w-4 h-4 mr-2" />}

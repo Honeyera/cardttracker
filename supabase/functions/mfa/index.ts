@@ -36,6 +36,7 @@ const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const PEPPER = Deno.env.get("MFA_PEPPER") ?? "";
 const CODE_TTL_MIN = 10;
 const MAX_ATTEMPTS = 5;
+const DEVICE_TTL_DAYS = 30;
 
 const admin = () => createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: false } });
 
@@ -137,6 +138,38 @@ async function isEnabled(userId: string): Promise<boolean> {
   return !!data?.email_mfa_enabled;
 }
 
+// A hex hash of a device token (same scheme as codes, salted by a fixed tag).
+async function hashToken(token: string): Promise<string> {
+  const data = new TextEncoder().encode(`device:${token}:${PEPPER}`);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// True if this device token is a known, unexpired trusted device for the user.
+async function deviceTrusted(userId: string, token: string): Promise<boolean> {
+  if (!token) return false;
+  const db = admin();
+  const { data } = await db.from("trusted_devices").select("id, expires_at")
+    .eq("user_id", userId).eq("token_hash", await hashToken(token)).maybeSingle();
+  if (!data || new Date(data.expires_at).getTime() < Date.now()) return false;
+  await db.from("trusted_devices").update({ last_used_at: new Date().toISOString() }).eq("id", data.id);
+  return true;
+}
+
+// Mint + store a new trusted-device token; returns the plaintext for the client.
+async function rememberDevice(userId: string, label: string): Promise<string> {
+  const token = [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const expires_at = new Date(Date.now() + DEVICE_TTL_DAYS * 86_400_000).toISOString();
+  await admin().from("trusted_devices").insert({ user_id: userId, token_hash: await hashToken(token), label, expires_at });
+  return token;
+}
+
+async function signInSession(email: string, password: string) {
+  const c = createClient(SUPABASE_URL, ANON, { auth: { persistSession: false } });
+  const { data } = await c.auth.signInWithPassword({ email, password });
+  return sessionOut(data.session);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   try {
@@ -144,26 +177,28 @@ serve(async (req) => {
     const action = String(body.action ?? "");
 
     if (action === "login") {
-      const user = await checkPassword(String(body.email ?? ""), String(body.password ?? ""));
+      const password = String(body.password ?? "");
+      const user = await checkPassword(String(body.email ?? ""), password);
       if (!user) return json({ error: "Invalid email or password" }, 401);
-      if (!(await isEnabled(user.id))) {
-        // No second factor for this user — sign in normally and return the session.
-        const c = createClient(SUPABASE_URL, ANON, { auth: { persistSession: false } });
-        const { data } = await c.auth.signInWithPassword({ email: user.email, password: String(body.password) });
-        return json({ status: "authenticated", session: sessionOut(data.session) });
+      // No second factor, OR this is a remembered device → sign in directly.
+      if (!(await isEnabled(user.id)) || await deviceTrusted(user.id, String(body.deviceToken ?? ""))) {
+        return json({ status: "authenticated", session: await signInSession(user.email, password) });
       }
       const challengeId = await issueChallenge(user.id, user.email, "login");
       return json({ status: "mfa_required", challengeId });
     }
 
     if (action === "verify") {
-      const user = await checkPassword(String(body.email ?? ""), String(body.password ?? ""));
+      const password = String(body.password ?? "");
+      const user = await checkPassword(String(body.email ?? ""), password);
       if (!user) return json({ error: "Invalid email or password" }, 401);
       const ok = await consumeChallenge(String(body.challengeId ?? ""), user.id, "login", String(body.code ?? ""));
       if (!ok) return json({ error: "Invalid or expired code" }, 401);
-      const c = createClient(SUPABASE_URL, ANON, { auth: { persistSession: false } });
-      const { data } = await c.auth.signInWithPassword({ email: user.email, password: String(body.password) });
-      return json({ status: "authenticated", session: sessionOut(data.session) });
+      // Optionally remember this device so it skips the code next time.
+      const deviceToken = body.remember
+        ? await rememberDevice(user.id, String(body.deviceLabel ?? "").slice(0, 120))
+        : null;
+      return json({ status: "authenticated", session: await signInSession(user.email, password), deviceToken });
     }
 
     if (action === "enroll-send") {
@@ -190,7 +225,17 @@ serve(async (req) => {
       const { error } = await admin().from("user_security")
         .upsert({ user_id: caller.id, email_mfa_enabled: false, updated_at: new Date().toISOString() });
       if (error) throw error;
+      // Turning 2FA off clears remembered devices, so re-enabling starts clean.
+      await admin().from("trusted_devices").delete().eq("user_id", caller.id);
       return json({ status: "disabled" });
+    }
+
+    if (action === "forget-devices") {
+      const caller = await callerFromJwt(req);
+      if (!caller) return json({ error: "Not authenticated" }, 401);
+      const { error } = await admin().from("trusted_devices").delete().eq("user_id", caller.id);
+      if (error) throw error;
+      return json({ status: "forgotten" });
     }
 
     return json({ error: "Unknown action" }, 400);
