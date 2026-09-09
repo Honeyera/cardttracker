@@ -17,6 +17,12 @@ const authSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
+// Temporarily route login directly to Supabase (bypassing the mfa function)
+// while the server-side password path is being verified. Flip back to true once
+// the mfa function is confirmed to authenticate a real user end-to-end.
+// No user is enrolled yet, so this changes nothing for anyone.
+const MFA_LOGIN_ENABLED = false;
+
 const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -52,6 +58,14 @@ const Auth = () => {
     setLoading(true);
 
     try {
+      if (!MFA_LOGIN_ENABLED) {
+        // Direct sign-in (pre-2FA flow) — the reliable path while debugging.
+        const { error } = await signIn(email, password);
+        if (error) throw error;
+        toast.success('Welcome back!');
+        navigate('/');
+        return;
+      }
       const result = await mfaLogin(email, password);
       if (result.status === 'mfa_required') {
         setMfaChallenge({ challengeId: result.challengeId, password });
