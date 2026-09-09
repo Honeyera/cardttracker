@@ -397,7 +397,10 @@ const Dashboard = () => {
               {depository.length === 0 ? (
                 <div className="bg-card rounded-2xl border border-border p-5"><Empty>No bank accounts synced yet.</Empty></div>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                // auto-fit packs as many compact tiles per row as fit (~200px
+                // min), so 4 accounts land in one row and it still wraps
+                // gracefully as the count grows or the screen narrows.
+                <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
                   {depository.map((a) => (
                     <AccountTile key={a.id} account={a}
                       history={snapshots.filter((s) => s.accountId === a.id)}
@@ -568,25 +571,23 @@ function AccountTile({ account, history, onClick }: {
 }) {
   return (
     <button type="button" onClick={onClick}
-      className="bg-card rounded-2xl border border-border p-5 shadow-sm text-left w-full hover:border-primary/40 hover:shadow-md transition-all">
-      <div className="flex items-center gap-3 mb-3">
-        <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-          <Landmark className="w-5 h-5" />
+      className="bg-card rounded-2xl border border-border p-4 shadow-sm text-left w-full hover:border-primary/40 hover:shadow-md transition-all">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+          <Landmark className="w-4 h-4" />
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold truncate">{account.name}</p>
-          <p className="text-xs text-muted-foreground truncate">
-            {account.institution ?? 'Bank'}
-            {account.lastFour ? ` •••• ${account.lastFour}` : ''}
-            {' · '}{account.accountType}
-          </p>
-        </div>
+        <p className="font-semibold text-sm truncate flex-1 min-w-0">{account.name}</p>
         <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
       </div>
-      <p className="text-3xl font-bold text-card-foreground">{fmtMoney(account.currentBalance, { cents: true })}</p>
-      <div className="flex items-center justify-between mt-1">
-        <p className="text-xs text-muted-foreground">
-          {fmtMoney(account.availableBalance, { cents: true })} available
+      <p className="text-xs text-muted-foreground truncate mb-1.5">
+        {account.institution ?? 'Bank'}
+        {account.lastFour ? ` •••• ${account.lastFour}` : ''}
+        {' · '}{account.accountType}
+      </p>
+      <p className="text-2xl font-bold text-card-foreground truncate">{fmtMoney(account.currentBalance, { cents: true })}</p>
+      <div className="flex items-end justify-between gap-2 mt-1">
+        <p className="text-xs text-muted-foreground truncate">
+          {fmtMoney(account.availableBalance)} available
         </p>
         {history.length > 1 && <Sparkline data={history} />}
       </div>
@@ -596,7 +597,7 @@ function AccountTile({ account, history, onClick }: {
 
 function Sparkline({ data }: { data: BalanceSnapshot[] }) {
   return (
-    <div className="w-24 h-8">
+    <div className="w-16 h-7 shrink-0">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
           <defs>
