@@ -26,6 +26,10 @@ const fmtMoney = (n: number, opts: { cents?: boolean } = {}) =>
     maximumFractionDigits: opts.cents ? 2 : 0,
   });
 
+// Compact money for tight tile rows: $87,400 -> $87k. Exact values live in
+// the card dialog.
+const fmtCompact = (n: number) => (n >= 1000 ? `$${Math.round(n / 1000)}k` : fmtMoney(n));
+
 const fmtDate = (iso: string | null) => {
   if (!iso) return '—';
   try { return format(parseISO(iso), 'MMM d, yyyy'); } catch { return iso; }
@@ -763,18 +767,35 @@ function CardTile({ card, adSpend, onClick }: { card: FinanceCard; adSpend?: AdS
           </div>
         )}
 
-        {/* Annual ad-spend cap meter (only cards with a configured limit) */}
+        {/* Annual ad-spend budget (only cards with a configured cap).
+            Deliberately a different form than the utilization bar above:
+            10 discrete blocks ($15k each), divider-separated, "left" framing —
+            so the two meters can't be confused at a glance. */}
         {adSpend && (
-          <div>
-            <div className="h-2 rounded-full bg-muted overflow-hidden">
-              <div className={cn('h-full rounded-full',
-                adSpend.fraction >= 0.9 ? 'bg-destructive' : adSpend.fraction >= 0.8 ? 'bg-warning' : 'bg-primary')}
-                style={{ width: `${Math.min(100, Math.max(2, adSpend.fraction * 100))}%` }} />
+          <div className="border-t border-border pt-2.5">
+            <div className="flex items-center justify-between gap-2 text-xs mb-1.5">
+              <span className="flex items-center gap-1 text-muted-foreground min-w-0">
+                <Megaphone className="w-3 h-3 shrink-0" />
+                <span className="truncate">
+                  Ad spend {Math.round(adSpend.fraction * 100)}% of {fmtCompact(adSpend.limit)}
+                </span>
+              </span>
+              <span className={cn('font-semibold whitespace-nowrap',
+                adSpend.fraction >= 1 ? 'text-destructive'
+                  : adSpend.fraction >= 0.8 ? 'text-warning' : 'text-muted-foreground')}>
+                {adSpend.fraction >= 1
+                  ? `${fmtCompact(adSpend.spent - adSpend.limit)} over`
+                  : `${fmtCompact(adSpend.limit - adSpend.spent)} left`}
+              </span>
             </div>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-              <Megaphone className="w-3 h-3 shrink-0" />
-              Ad spend: {fmtMoney(adSpend.spent)} of {fmtMoney(adSpend.limit)} ({Math.round(adSpend.fraction * 100)}%)
-            </p>
+            <div className="flex gap-0.5">
+              {Array.from({ length: 10 }, (_, i) => (
+                <div key={i} className={cn('h-1.5 flex-1 rounded-sm',
+                  i < Math.min(10, Math.max(adSpend.fraction > 0 ? 1 : 0, Math.round(adSpend.fraction * 10)))
+                    ? (adSpend.fraction >= 0.9 ? 'bg-destructive' : adSpend.fraction >= 0.8 ? 'bg-warning' : 'bg-primary')
+                    : 'bg-muted')} />
+              ))}
+            </div>
           </div>
         )}
 
