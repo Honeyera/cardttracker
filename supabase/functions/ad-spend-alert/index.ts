@@ -12,7 +12,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const AD_SPEND_LIMITS: { cardMatch: RegExp; annualLimit: number }[] = [
-  { cardMatch: /amex|american express/i, annualLimit: 150_000 },
+  // Keep in sync with src/utils/adSpend.ts
+  { cardMatch: /amex|american express|gold/i, annualLimit: 150_000 },
 ];
 const THRESHOLDS = [0.8, 0.9, 1.0];
 

@@ -53,6 +53,11 @@ describe('adSpendLimitFor', () => {
     expect(adSpendLimitFor({ name: 'American Express Gold', companyName: null })).toBe(150_000);
   });
 
+  it("matches the user's Gold cards, which don't say Amex in the title", () => {
+    expect(adSpendLimitFor({ name: 'Business Gold', companyName: 'Honeyera' })).toBe(150_000);
+    expect(adSpendLimitFor({ name: 'Gold Card 2', companyName: null })).toBe(150_000);
+  });
+
   it('returns null for untracked cards', () => {
     expect(adSpendLimitFor({ name: 'Sapphire', companyName: 'Chase' })).toBeNull();
   });

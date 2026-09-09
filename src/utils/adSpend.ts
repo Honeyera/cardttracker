@@ -8,7 +8,9 @@ import { FinanceCard, FinanceTransaction } from '@/hooks/useFinanceData';
 // NOTE: the email alert edge function keeps its own copy of these
 // patterns (supabase/functions/ad-spend-alert) — keep the two in sync.
 export const AD_SPEND_LIMITS: { cardMatch: RegExp; annualLimit: number }[] = [
-  { cardMatch: /amex|american express/i, annualLimit: 150_000 },
+  // The user's Amex Business Golds are titled "... Gold ..." (no "amex" in the
+  // name); each Gold card carries its own $150k/calendar-year ad-spend cap.
+  { cardMatch: /amex|american express|gold/i, annualLimit: 150_000 },
 ];
 
 // Alert thresholds as fractions of the annual limit.
