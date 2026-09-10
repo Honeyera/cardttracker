@@ -226,7 +226,10 @@ const Dashboard = () => {
   // Income counts deposits + refunds; spending counts purchases + fees.
   const income = activityTxns.filter((t) => t.type === 'income' || t.type === 'refund').reduce((s, t) => s + t.amount, 0);
   const spend = activityTxns.filter((t) => t.type === 'expense' || t.type === 'fee').reduce((s, t) => s + t.amount, 0);
-  const payments = activityTxns.filter((t) => t.type === 'payment');
+  // Card payments are recorded twice — once as the bank outflow (account_id, no
+  // card) and once on the card that received it (credit_card_id). Count only the
+  // bank-side outflow to avoid double-counting the same payment.
+  const payments = activityTxns.filter((t) => t.type === 'payment' && !t.creditCardId);
   const paymentsTotal = payments.reduce((s, t) => s + t.amount, 0);
 
   const cardName = (id: string | null) =>
