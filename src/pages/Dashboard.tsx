@@ -171,8 +171,11 @@ const Dashboard = () => {
   }, [user, authLoading, navigate]);
 
   const companies = useMemo(
-    () => Array.from(new Set(cards.map((c) => c.companyName).filter(Boolean))) as string[],
-    [cards],
+    () => Array.from(new Set([
+      ...cards.map((c) => c.companyName),
+      ...accounts.map((a) => a.company),
+    ].filter(Boolean))).sort() as string[],
+    [cards, accounts],
   );
 
   const visibleCards = useMemo(() => {
@@ -181,9 +184,20 @@ const Dashboard = () => {
   }, [cards, company, cardSort]);
 
   const depository = useMemo(
-    () => accounts.filter((a) => a.accountType === 'checking' || a.accountType === 'savings'),
-    [accounts],
+    () => accounts
+      .filter((a) => a.accountType === 'checking' || a.accountType === 'savings')
+      .filter((a) => company === 'all' || a.company === company),
+    [accounts, company],
   );
+
+  // A transaction belongs to the selected brand if its card or its account does.
+  const brandTxns = useMemo(() => {
+    if (company === 'all') return transactions;
+    const cardIds = new Set(cards.filter((c) => c.companyName === company).map((c) => c.id));
+    const acctIds = new Set(accounts.filter((a) => a.company === company).map((a) => a.id));
+    return transactions.filter((t) =>
+      (t.creditCardId && cardIds.has(t.creditCardId)) || (t.accountId && acctIds.has(t.accountId)));
+  }, [transactions, cards, accounts, company]);
 
   // ── Top-line numbers ────────────────────────────────────────────────
   const availableCash = depository.reduce((s, a) => s + a.currentBalance, 0);
@@ -206,8 +220,8 @@ const Dashboard = () => {
     : activityPeriod === '30d' ? isoDaysAgo(30)
     : activityPeriod === '90d' ? isoDaysAgo(90) : '';
   const activityTxns = useMemo(
-    () => transactions.filter((t) => !activityFrom || t.date >= activityFrom),
-    [transactions, activityFrom],
+    () => brandTxns.filter((t) => !activityFrom || t.date >= activityFrom),
+    [brandTxns, activityFrom],
   );
   // Income counts deposits + refunds; spending counts purchases + fees.
   const income = activityTxns.filter((t) => t.type === 'income' || t.type === 'refund').reduce((s, t) => s + t.amount, 0);
@@ -541,11 +555,11 @@ const Dashboard = () => {
               </div>
               <div className="bg-card rounded-2xl border border-border p-5">
                 <SectionTitle icon={TrendingDown}>Recent Transactions</SectionTitle>
-                {transactions.length === 0 ? (
+                {brandTxns.length === 0 ? (
                   <Empty>No transactions synced yet.</Empty>
                 ) : (
                   <div className="space-y-2 mt-3">
-                    {transactions.filter((t) => t.type !== 'payment').slice(0, 8).map((t) => (
+                    {brandTxns.filter((t) => t.type !== 'payment').slice(0, 8).map((t) => (
                       <TxnRow key={t.id} txn={t} cardName={cardName(t.creditCardId)} />
                     ))}
                   </div>
