@@ -163,7 +163,7 @@ const Dashboard = () => {
   const [company, setCompany] = useState('all');
   const [selectedCard, setSelectedCard] = useState<FinanceCard | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<FinanceAccount | null>(null);
-  const [activityPeriod, setActivityPeriod] = useState<'month' | '30d' | '90d' | 'all'>('month');
+  const [activityPeriod, setActivityPeriod] = useState<'month' | '30d' | '90d' | 'ytd' | 'all'>('month');
   const [cardSort, setCardSort] = useState<CardSort>('urgency');
   const [activityDetail, setActivityDetail] = useState<null | 'income' | 'spend' | 'payments'>(null);
 
@@ -219,7 +219,8 @@ const Dashboard = () => {
   // ── Activity roll-up, scoped to a selected period ──────────────────
   const activityFrom = activityPeriod === 'month' ? isoMonthStart()
     : activityPeriod === '30d' ? isoDaysAgo(30)
-    : activityPeriod === '90d' ? isoDaysAgo(90) : '';
+    : activityPeriod === '90d' ? isoDaysAgo(90)
+    : activityPeriod === 'ytd' ? isoYearStart() : '';
   const activityTxns = useMemo(
     () => brandTxns.filter((t) => !activityFrom || t.date >= activityFrom),
     [brandTxns, activityFrom],
@@ -245,7 +246,8 @@ const Dashboard = () => {
 
   const periodLabel = activityPeriod === 'month' ? 'This month'
     : activityPeriod === '30d' ? 'Last 30 days'
-    : activityPeriod === '90d' ? 'Last 90 days' : 'All time';
+    : activityPeriod === '90d' ? 'Last 90 days'
+    : activityPeriod === 'ytd' ? 'Year to date' : 'All time';
 
   const activityBreakdown = useMemo(() => {
     if (!activityDetail) return null;
@@ -551,6 +553,7 @@ const Dashboard = () => {
                   <RangeChip onClick={() => setActivityPeriod('month')} active={activityPeriod === 'month'}>This Month</RangeChip>
                   <RangeChip onClick={() => setActivityPeriod('30d')} active={activityPeriod === '30d'}>30d</RangeChip>
                   <RangeChip onClick={() => setActivityPeriod('90d')} active={activityPeriod === '90d'}>90d</RangeChip>
+                  <RangeChip onClick={() => setActivityPeriod('ytd')} active={activityPeriod === 'ytd'}>YTD</RangeChip>
                   <RangeChip onClick={() => setActivityPeriod('all')} active={activityPeriod === 'all'}>All</RangeChip>
                 </div>
               </div>
@@ -1021,6 +1024,9 @@ function isoDaysAgo(days: number): string {
 }
 function isoMonthStart(): string {
   const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+}
+function isoYearStart(): string {
+  return new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10);
 }
 
 type Flow = 'all' | 'in' | 'out' | 'ads';
