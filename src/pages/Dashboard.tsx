@@ -807,26 +807,25 @@ function ActivityBreakdownDialog({ detail, sourceOf, onClose }: {
             </div>
 
             {/* Per-source groups with subtotals */}
-            <div className="space-y-4 mt-1">
+            <div className="space-y-4 mt-1 min-w-0">
               {groups.map((g) => (
-                <div key={g.source}>
-                  <div className="flex items-center justify-between border-b border-border pb-1 mb-1">
-                    <span className="flex items-center gap-2 font-semibold text-sm">
-                      {g.txns[0]?.creditCardId ? <CardIcon className="w-4 h-4 text-primary" /> : <Landmark className="w-4 h-4 text-primary" />}
-                      {g.source}
-                      <span className="text-xs text-muted-foreground font-normal">({g.txns.length})</span>
+                <div key={g.source} className="min-w-0">
+                  <div className="flex items-center justify-between gap-2 border-b border-border pb-1 mb-1 min-w-0">
+                    <span className="flex items-center gap-2 font-semibold text-sm min-w-0">
+                      {g.txns[0]?.creditCardId ? <CardIcon className="w-4 h-4 text-primary shrink-0" /> : <Landmark className="w-4 h-4 text-primary shrink-0" />}
+                      <span className="truncate">{g.source}</span>
+                      <span className="text-xs text-muted-foreground font-normal shrink-0">({g.txns.length})</span>
                     </span>
-                    <span className="font-semibold text-sm">{fmtMoney(g.total, { cents: true })}</span>
+                    <span className="font-semibold text-sm shrink-0">{fmtMoney(g.total, { cents: true })}</span>
                   </div>
                   <div className="space-y-0.5">
                     {g.txns.sort((a, b) => (a.date < b.date ? 1 : -1)).map((t) => (
-                      <div key={t.id} className="flex items-center justify-between text-sm py-0.5">
-                        <span className="flex items-center gap-2 min-w-0">
+                      <div key={t.id} className="flex items-center justify-between gap-2 text-sm py-0.5 min-w-0">
+                        <span className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-xs text-muted-foreground w-12 shrink-0">{format(parseISO(t.date), 'MMM d')}</span>
                           <span className="truncate">{t.merchantName || t.description}</span>
-                          {t.category && <span className="text-xs text-muted-foreground shrink-0 hidden sm:inline">· {t.category}</span>}
                         </span>
-                        <span className="shrink-0 ml-2 tabular-nums">{fmtMoney(t.amount, { cents: true })}</span>
+                        <span className="shrink-0 tabular-nums font-medium">{fmtMoney(t.amount, { cents: true })}</span>
                       </div>
                     ))}
                   </div>
