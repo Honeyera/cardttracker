@@ -165,6 +165,7 @@ const Dashboard = () => {
   const [selectedAccount, setSelectedAccount] = useState<FinanceAccount | null>(null);
   const [activityPeriod, setActivityPeriod] = useState<'month' | '30d' | '90d' | 'all'>('month');
   const [cardSort, setCardSort] = useState<CardSort>('urgency');
+  const [activityDetail, setActivityDetail] = useState<null | 'income' | 'spend' | 'payments'>(null);
 
   useEffect(() => {
     if (!authLoading && !user) navigate('/auth');
@@ -234,6 +235,30 @@ const Dashboard = () => {
 
   const cardName = (id: string | null) =>
     cards.find((c) => c.id === id)?.name ?? null;
+
+  // Which bank/card a transaction came from (for the breakdown view).
+  const sourceOf = (t: FinanceTransaction): string => {
+    if (t.creditCardId) return cards.find((c) => c.id === t.creditCardId)?.name ?? 'Card';
+    if (t.accountId) return accounts.find((a) => a.id === t.accountId)?.name ?? 'Account';
+    return 'Unlinked';
+  };
+
+  const periodLabel = activityPeriod === 'month' ? 'This month'
+    : activityPeriod === '30d' ? 'Last 30 days'
+    : activityPeriod === '90d' ? 'Last 90 days' : 'All time';
+
+  const activityBreakdown = useMemo(() => {
+    if (!activityDetail) return null;
+    const cfg = {
+      income: { title: 'Income', tone: 'success' as Tone, calc: 'Deposits and refunds (money in)',
+        txns: activityTxns.filter((t) => t.type === 'income' || t.type === 'refund') },
+      spend: { title: 'Spending', tone: 'warning' as Tone, calc: 'Purchases and fees (money out) — excludes card payments & transfers',
+        txns: activityTxns.filter((t) => t.type === 'expense' || t.type === 'fee') },
+      payments: { title: 'Card Payments', tone: 'muted' as Tone, calc: 'Cash paid from bank accounts toward cards (each payment counted once)',
+        txns: payments },
+    }[activityDetail];
+    return { ...cfg, period: periodLabel };
+  }, [activityDetail, activityTxns, payments, periodLabel]);
 
   // Cards needing attention: overdue, or due within 7 days with a balance owed.
   const attentionCards = useMemo(
@@ -530,11 +555,11 @@ const Dashboard = () => {
                 </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mt-3">
-                <Flow label="Income" value={income} icon={ArrowDownRight} tone="success" />
-                <Flow label="Spending" value={spend} icon={ArrowUpRight} tone="warning" />
-                <Flow label="Card Payments" value={paymentsTotal} icon={CardIcon} tone="muted" />
-                <div className="flex items-center justify-between sm:justify-end sm:gap-2">
-                  <span className="text-sm font-medium">Net</span>
+                <Flow label="Income" value={income} icon={ArrowDownRight} tone="success" onClick={() => setActivityDetail('income')} />
+                <Flow label="Spending" value={spend} icon={ArrowUpRight} tone="warning" onClick={() => setActivityDetail('spend')} />
+                <Flow label="Card Payments" value={paymentsTotal} icon={CardIcon} tone="muted" onClick={() => setActivityDetail('payments')} />
+                <div className="flex items-center justify-between sm:justify-end sm:gap-2" title="Income − Spending">
+                  <span className="text-sm font-medium">Net (income − spend)</span>
                   <span className={cn('text-sm font-bold', income - spend >= 0 ? 'text-success' : 'text-destructive')}>
                     {fmtMoney(income - spend, { cents: true })}
                   </span>
@@ -585,6 +610,12 @@ const Dashboard = () => {
         transactions={selectedAccount ? transactions.filter((t) => t.accountId === selectedAccount.id) : []}
         history={selectedAccount ? snapshots.filter((s) => s.accountId === selectedAccount.id) : []}
         onClose={() => setSelectedAccount(null)}
+      />
+
+      <ActivityBreakdownDialog
+        detail={activityBreakdown}
+        sourceOf={sourceOf}
+        onClose={() => setActivityDetail(null)}
       />
     </div>
   );
@@ -736,16 +767,93 @@ function AccountDetailDialog({ account, transactions, history, onClose }: {
   );
 }
 
-function Flow({ label, value, icon: Icon, tone }: {
-  label: string; value: number; icon: React.ComponentType<{ className?: string }>; tone: Tone;
+function ActivityBreakdownDialog({ detail, sourceOf, onClose }: {
+  detail: { title: string; tone: Tone; calc: string; period: string; txns: FinanceTransaction[] } | null;
+  sourceOf: (t: FinanceTransaction) => string;
+  onClose: () => void;
+}) {
+  const open = detail != null;
+  // Group transactions by their source (bank/card), each with a subtotal.
+  const groups = useMemo(() => {
+    if (!detail) return [];
+    const m = new Map<string, { source: string; total: number; txns: FinanceTransaction[] }>();
+    for (const t of detail.txns) {
+      const src = sourceOf(t);
+      if (!m.has(src)) m.set(src, { source: src, total: 0, txns: [] });
+      const g = m.get(src)!;
+      g.total += t.amount; g.txns.push(t);
+    }
+    return Array.from(m.values()).sort((a, b) => b.total - a.total);
+  }, [detail, sourceOf]);
+  const grandTotal = groups.reduce((s, g) => s + g.total, 0);
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto overflow-x-hidden">
+        {detail && (
+          <>
+            <DialogHeader>
+              <DialogTitle>{detail.title} · <span className="font-normal text-muted-foreground">{detail.period}</span></DialogTitle>
+            </DialogHeader>
+
+            {/* Total + how it's calculated */}
+            <div className="rounded-xl bg-muted/50 p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Total</span>
+                <span className={cn('text-2xl font-bold', toneText[detail.tone])}>{fmtMoney(grandTotal, { cents: true })}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">How it's calculated: {detail.calc}</p>
+              <p className="text-xs text-muted-foreground">{detail.txns.length} transaction{detail.txns.length === 1 ? '' : 's'} across {groups.length} source{groups.length === 1 ? '' : 's'}.</p>
+            </div>
+
+            {/* Per-source groups with subtotals */}
+            <div className="space-y-4 mt-1">
+              {groups.map((g) => (
+                <div key={g.source}>
+                  <div className="flex items-center justify-between border-b border-border pb-1 mb-1">
+                    <span className="flex items-center gap-2 font-semibold text-sm">
+                      {g.txns[0]?.creditCardId ? <CardIcon className="w-4 h-4 text-primary" /> : <Landmark className="w-4 h-4 text-primary" />}
+                      {g.source}
+                      <span className="text-xs text-muted-foreground font-normal">({g.txns.length})</span>
+                    </span>
+                    <span className="font-semibold text-sm">{fmtMoney(g.total, { cents: true })}</span>
+                  </div>
+                  <div className="space-y-0.5">
+                    {g.txns.sort((a, b) => (a.date < b.date ? 1 : -1)).map((t) => (
+                      <div key={t.id} className="flex items-center justify-between text-sm py-0.5">
+                        <span className="flex items-center gap-2 min-w-0">
+                          <span className="text-xs text-muted-foreground w-12 shrink-0">{format(parseISO(t.date), 'MMM d')}</span>
+                          <span className="truncate">{t.merchantName || t.description}</span>
+                          {t.category && <span className="text-xs text-muted-foreground shrink-0 hidden sm:inline">· {t.category}</span>}
+                        </span>
+                        <span className="shrink-0 ml-2 tabular-nums">{fmtMoney(t.amount, { cents: true })}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {groups.length === 0 && <Empty>No transactions in this period.</Empty>}
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Flow({ label, value, icon: Icon, tone, onClick }: {
+  label: string; value: number; icon: React.ComponentType<{ className?: string }>; tone: Tone; onClick?: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between">
+    <button type="button" onClick={onClick} disabled={!onClick}
+      className={cn('flex items-center justify-between w-full text-left rounded-lg px-2 py-1 -mx-2',
+        onClick && 'hover:bg-muted transition-colors cursor-pointer')}>
       <span className="flex items-center gap-2 text-sm text-muted-foreground">
         <Icon className={cn('w-4 h-4', toneText[tone])} />{label}
+        {onClick && <ChevronRight className="w-3 h-3 opacity-50" />}
       </span>
       <span className="font-semibold">{fmtMoney(value, { cents: true })}</span>
-    </div>
+    </button>
   );
 }
 
