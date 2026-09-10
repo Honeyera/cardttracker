@@ -96,23 +96,20 @@ function isSettled(card: FinanceCard): boolean {
 // than the statement balance — so the unpaid remainder will accrue interest.
 // Returns the shortfall details, or null if the statement was paid in full /
 // nothing is owed / no payment has yet been applied to this statement.
-function interestRisk(card: FinanceCard): { paid: number; statement: number; remaining: number } | null {
+// `paidTowardStatement` is the sum of all payments applied since the statement
+// closed (from the transaction history) — more accurate than the single stored
+// last_payment_amount, which misses installment payments.
+function interestRisk(card: FinanceCard, paidTowardStatement: number): { paid: number; statement: number; remaining: number } | null {
   if (isSettled(card)) return null;
   const stmt = card.lastStatementBalance ?? 0;
   if (stmt <= 0.005) return null;
-  if (card.lastPaymentAmount == null || !card.lastPaymentDate || !card.lastStatementDate) return null;
-  // Only count a payment that applies to this statement (made on/after it closed).
-  if (card.lastPaymentDate < card.lastStatementDate) return null;
-  const paid = card.lastPaymentAmount;
-  if (paid + 0.005 >= stmt) return null; // fully covered
-  if (paid <= 0.005) return null; // no payment applied — that's a "due" case, not underpayment
-  // Only the last single payment is stored, so a statement paid in several
-  // installments looks underpaid. You can't accrue interest on more than the
-  // current balance, so cap the at-risk amount by it — and if what's left is
-  // within the minimum payment, the statement is effectively paid.
-  const atRisk = Math.min(stmt - paid, card.totalBalance);
+  if (paidTowardStatement <= 0.005) return null; // nothing paid → a "due" case, not underpayment
+  if (paidTowardStatement + 0.005 >= stmt) return null; // statement fully paid (across any number of payments)
+  // You can't accrue interest on more than you currently owe; if what's left is
+  // within the minimum payment, treat the statement as effectively paid.
+  const atRisk = Math.min(stmt - paidTowardStatement, card.totalBalance);
   if (atRisk <= Math.max(1, card.minimumPayment ?? 0) + 0.005) return null;
-  return { paid, statement: stmt, remaining: atRisk };
+  return { paid: paidTowardStatement, statement: stmt, remaining: atRisk };
 }
 
 // Lower rank = more urgent (sorts first). Overdue < due-soon (by days) < settled.
@@ -280,10 +277,30 @@ const Dashboard = () => {
     [alerts],
   );
 
+  // Total paid toward each card's current statement (sum of payments on/after the
+  // statement close date), from actual transactions — handles installments.
+  const paidTowardStatementByCard = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of transactions) {
+      if (t.type !== 'payment' || !t.creditCardId) continue;
+      const card = cards.find((c) => c.id === t.creditCardId);
+      if (card?.lastStatementDate && t.date >= card.lastStatementDate) {
+        m.set(t.creditCardId, (m.get(t.creditCardId) ?? 0) + t.amount);
+      }
+    }
+    // Floor by the stored last payment in case a payment isn't in the tx history.
+    for (const c of cards) {
+      if (c.lastPaymentAmount && c.lastPaymentDate && c.lastStatementDate && c.lastPaymentDate >= c.lastStatementDate) {
+        m.set(c.id, Math.max(m.get(c.id) ?? 0, c.lastPaymentAmount));
+      }
+    }
+    return m;
+  }, [transactions, cards]);
+
   // Cards where the statement was underpaid → interest will accrue.
   const interestRiskCards = useMemo(
-    () => visibleCards.map((c) => ({ card: c, risk: interestRisk(c) })).filter((x) => x.risk != null),
-    [visibleCards],
+    () => visibleCards.map((c) => ({ card: c, risk: interestRisk(c, paidTowardStatementByCard.get(c.id) ?? 0) })).filter((x) => x.risk != null),
+    [visibleCards, paidTowardStatementByCard],
   );
 
   // Calendar-year ad spend, per card with a configured annual cap.
@@ -545,7 +562,7 @@ const Dashboard = () => {
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {visibleCards.map((c) => (
-                    <CardTile key={c.id} card={c} adSpend={adSpendByCard.get(c.id)} onClick={() => setSelectedCard(c)} />
+                    <CardTile key={c.id} card={c} adSpend={adSpendByCard.get(c.id)} paidTowardStatement={paidTowardStatementByCard.get(c.id) ?? 0} onClick={() => setSelectedCard(c)} />
                   ))}
                 </div>
               )}
@@ -865,10 +882,10 @@ function Flow({ label, value, icon: Icon, tone, onClick }: {
   );
 }
 
-function CardTile({ card, adSpend, onClick }: { card: FinanceCard; adSpend?: AdSpendStatus; onClick?: () => void }) {
+function CardTile({ card, adSpend, paidTowardStatement, onClick }: { card: FinanceCard; adSpend?: AdSpendStatus; paidTowardStatement: number; onClick?: () => void }) {
   const due = resolveDue(card);
   const settled = isSettled(card);
-  const risk = interestRisk(card);
+  const risk = interestRisk(card, paidTowardStatement);
   const gradient = cardColorClasses[(card.color as CardColor)] ?? cardColorClasses.navy;
   const utilization = card.creditLimit > 0 ? Math.min(1, card.totalBalance / card.creditLimit) : null;
 
