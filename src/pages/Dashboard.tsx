@@ -106,7 +106,13 @@ function interestRisk(card: FinanceCard): { paid: number; statement: number; rem
   const paid = card.lastPaymentAmount;
   if (paid + 0.005 >= stmt) return null; // fully covered
   if (paid <= 0.005) return null; // no payment applied — that's a "due" case, not underpayment
-  return { paid, statement: stmt, remaining: stmt - paid };
+  // Only the last single payment is stored, so a statement paid in several
+  // installments looks underpaid. You can't accrue interest on more than the
+  // current balance, so cap the at-risk amount by it — and if what's left is
+  // within the minimum payment, the statement is effectively paid.
+  const atRisk = Math.min(stmt - paid, card.totalBalance);
+  if (atRisk <= Math.max(1, card.minimumPayment ?? 0) + 0.005) return null;
+  return { paid, statement: stmt, remaining: atRisk };
 }
 
 // Lower rank = more urgent (sorts first). Overdue < due-soon (by days) < settled.
