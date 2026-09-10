@@ -117,6 +117,45 @@ function urgencyRank(card: FinanceCard): number {
   return due ? due.days : 99999; // no due date → near the end, but before settled
 }
 
+// Days until the card's statement next closes (by statement day-of-month).
+function nextClosingDays(card: FinanceCard): number {
+  if (!card.statementDay) return 999999;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return differenceInCalendarDays(getNextOccurrence(card.statementDay), today);
+}
+
+function utilization(card: FinanceCard): number {
+  return card.creditLimit > 0 ? card.totalBalance / card.creditLimit : -1;
+}
+
+type CardSort = 'urgency' | 'due' | 'closing' | 'balance' | 'limit' | 'utilization' | 'name';
+
+const CARD_SORT_OPTIONS: { value: CardSort; label: string }[] = [
+  { value: 'urgency', label: 'Urgency (default)' },
+  { value: 'due', label: 'Payment due date' },
+  { value: 'closing', label: 'Closing date' },
+  { value: 'balance', label: 'Balance (high→low)' },
+  { value: 'limit', label: 'Credit limit (high→low)' },
+  { value: 'utilization', label: 'Utilization (high→low)' },
+  { value: 'name', label: 'Name (A→Z)' },
+];
+
+function compareCards(a: FinanceCard, b: FinanceCard, sort: CardSort): number {
+  switch (sort) {
+    case 'due': {
+      const da = resolveDue(a)?.days ?? 999999;
+      const db = resolveDue(b)?.days ?? 999999;
+      return da - db;
+    }
+    case 'closing': return nextClosingDays(a) - nextClosingDays(b);
+    case 'balance': return b.totalBalance - a.totalBalance;
+    case 'limit': return b.creditLimit - a.creditLimit;
+    case 'utilization': return utilization(b) - utilization(a);
+    case 'name': return a.name.localeCompare(b.name);
+    default: return urgencyRank(a) - urgencyRank(b);
+  }
+}
+
 const Dashboard = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
@@ -125,6 +164,7 @@ const Dashboard = () => {
   const [selectedCard, setSelectedCard] = useState<FinanceCard | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<FinanceAccount | null>(null);
   const [activityPeriod, setActivityPeriod] = useState<'month' | '30d' | '90d' | 'all'>('month');
+  const [cardSort, setCardSort] = useState<CardSort>('urgency');
 
   useEffect(() => {
     if (!authLoading && !user) navigate('/auth');
@@ -137,10 +177,8 @@ const Dashboard = () => {
 
   const visibleCards = useMemo(() => {
     const filtered = company === 'all' ? cards : cards.filter((c) => c.companyName === company);
-    // Sort by urgency: overdue first, then soonest due (with a balance owed),
-    // then cards that are paid / have nothing due.
-    return [...filtered].sort((a, b) => urgencyRank(a) - urgencyRank(b));
-  }, [cards, company]);
+    return [...filtered].sort((a, b) => compareCards(a, b, cardSort));
+  }, [cards, company, cardSort]);
 
   const depository = useMemo(
     () => accounts.filter((a) => a.accountType === 'checking' || a.accountType === 'savings'),
@@ -435,11 +473,22 @@ const Dashboard = () => {
 
             {/* Card tiles */}
             <div>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
                 <SectionTitle icon={CardIcon}>Your Cards</SectionTitle>
-                <span className="text-xs text-muted-foreground">
-                  {visibleCards.length} {visibleCards.length === 1 ? 'card' : 'cards'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Sort:</span>
+                  <Select value={cardSort} onValueChange={(v) => setCardSort(v as CardSort)}>
+                    <SelectTrigger className="w-[190px] h-8 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CARD_SORT_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {visibleCards.length} {visibleCards.length === 1 ? 'card' : 'cards'}
+                  </span>
+                </div>
               </div>
               {visibleCards.length === 0 ? (
                 <Empty>No cards to show.</Empty>
