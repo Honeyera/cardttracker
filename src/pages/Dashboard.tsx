@@ -162,7 +162,7 @@ function compareCards(a: FinanceCard, b: FinanceCard, sort: CardSort): number {
 const Dashboard = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
-  const { accounts, transactions, cards, alerts, forecast, snapshots, loading, lastSyncedAt } = useFinanceData();
+  const { accounts, transactions, cards, alerts, forecast, snapshots, availablePoints, loading, lastSyncedAt } = useFinanceData();
   const [company, setCompany] = useState('all');
   const [selectedCard, setSelectedCard] = useState<FinanceCard | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<FinanceAccount | null>(null);
@@ -562,7 +562,7 @@ const Dashboard = () => {
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {visibleCards.map((c) => (
-                    <CardTile key={c.id} card={c} adSpend={adSpendByCard.get(c.id)} paidTowardStatement={paidTowardStatementByCard.get(c.id) ?? 0} onClick={() => setSelectedCard(c)} />
+                    <CardTile key={c.id} card={c} adSpend={adSpendByCard.get(c.id)} paidTowardStatement={paidTowardStatementByCard.get(c.id) ?? 0} points={availablePoints.get(c.id)} onClick={() => setSelectedCard(c)} />
                   ))}
                 </div>
               )}
@@ -882,7 +882,7 @@ function Flow({ label, value, icon: Icon, tone, onClick }: {
   );
 }
 
-function CardTile({ card, adSpend, paidTowardStatement, onClick }: { card: FinanceCard; adSpend?: AdSpendStatus; paidTowardStatement: number; onClick?: () => void }) {
+function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { card: FinanceCard; adSpend?: AdSpendStatus; paidTowardStatement: number; points?: number; onClick?: () => void }) {
   const due = resolveDue(card);
   const settled = isSettled(card);
   const risk = interestRisk(card, paidTowardStatement);
@@ -926,11 +926,21 @@ function CardTile({ card, adSpend, paidTowardStatement, onClick }: { card: Finan
         card.isOverdue && 'ring-1 ring-destructive/40',
       )}>
       {/* Identity header — name, digits, company. Status lives in the strip below. */}
-      <div className={cn('bg-gradient-to-r px-4 py-2.5 text-white', gradient)}>
-        <p className="font-semibold leading-tight truncate">{card.name}</p>
-        <p className="text-xs text-white/80 truncate">
-          {card.lastFour ? `•••• ${card.lastFour}` : ''}{card.companyName ? ` · ${card.companyName}` : ''}
-        </p>
+      <div className={cn('bg-gradient-to-r px-4 py-2.5 text-white flex items-start justify-between gap-2', gradient)}>
+        <div className="min-w-0">
+          <p className="font-semibold leading-tight truncate">{card.name}</p>
+          <p className="text-xs text-white/80 truncate">
+            {card.lastFour ? `•••• ${card.lastFour}` : ''}{card.companyName ? ` · ${card.companyName}` : ''}
+          </p>
+        </div>
+        {points != null && (
+          <div className="text-right shrink-0 leading-tight">
+            <p className="text-sm font-bold flex items-center gap-1 justify-end">
+              <Trophy className="w-3.5 h-3.5" />{points.toLocaleString('en-US')}
+            </p>
+            <p className="text-[10px] text-white/80 uppercase tracking-wide">points</p>
+          </div>
+        )}
       </div>
 
       {/* Status strip — tinted by state so overdue vs paid reads at a glance */}

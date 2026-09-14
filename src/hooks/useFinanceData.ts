@@ -271,6 +271,20 @@ export function useFinanceData() {
     },
   });
 
+  const pointsQuery = useQuery({
+    queryKey: ['finance', 'card_points', user?.id],
+    enabled: !!user,
+    queryFn: async (): Promise<Map<string, number>> => {
+      const { data, error } = await db
+        .from('card_available_points')
+        .select('card_id, available_points');
+      if (error) throw error;
+      const m = new Map<string, number>();
+      for (const r of (data ?? [])) m.set(r.card_id, num(r.available_points));
+      return m;
+    },
+  });
+
   return {
     accounts: accountsQuery.data ?? [],
     transactions: transactionsQuery.data ?? [],
@@ -278,6 +292,7 @@ export function useFinanceData() {
     alerts: alertsQuery.data ?? [],
     forecast: forecastQuery.data ?? [],
     snapshots: snapshotsQuery.data ?? [],
+    availablePoints: pointsQuery.data ?? new Map<string, number>(),
     loading: accountsQuery.isLoading || transactionsQuery.isLoading || cardsQuery.isLoading,
     error: accountsQuery.error || transactionsQuery.error || cardsQuery.error,
     // Most recent sync across cards (finance_synced_at) and accounts (updated_at).
