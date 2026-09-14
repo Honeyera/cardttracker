@@ -46,6 +46,7 @@ declare
   ];
   v_cols text;
   v_set text;
+  v_has_updated boolean;
   v_count int;
 begin
   if not (p_table = any(v_allowed)) then
@@ -64,11 +65,30 @@ begin
     from jsonb_object_keys(p_rows->0) k
     where k <> all (string_to_array(replace(p_conflict, ' ', ''), ','));
 
-  execute format(
-    'insert into public.%I (%s) select %s from jsonb_populate_recordset(null::public.%I, $1) ' ||
-    'on conflict (%s) do update set %s, updated_at = now()',
-    p_table, v_cols, v_cols, p_table, p_conflict, v_set
-  ) using p_rows;
+  -- Only touch updated_at on tables that actually have it (e.g. balance_snapshots does not).
+  select exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = p_table and column_name = 'updated_at'
+  ) into v_has_updated;
+  if v_has_updated then
+    v_set := coalesce(nullif(v_set, ''), '') ||
+             case when nullif(v_set, '') is null then '' else ', ' end || 'updated_at = now()';
+  end if;
+
+  if nullif(v_set, '') is null then
+    -- Nothing to update (all columns are the conflict key) — insert-or-ignore.
+    execute format(
+      'insert into public.%I (%s) select %s from jsonb_populate_recordset(null::public.%I, $1) ' ||
+      'on conflict (%s) do nothing',
+      p_table, v_cols, v_cols, p_table, p_conflict
+    ) using p_rows;
+  else
+    execute format(
+      'insert into public.%I (%s) select %s from jsonb_populate_recordset(null::public.%I, $1) ' ||
+      'on conflict (%s) do update set %s',
+      p_table, v_cols, v_cols, p_table, p_conflict, v_set
+    ) using p_rows;
+  end if;
 
   get diagnostics v_count = row_count;
   return jsonb_build_object('table', p_table, 'upserted', v_count);
