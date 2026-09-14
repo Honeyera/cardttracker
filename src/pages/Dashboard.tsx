@@ -450,7 +450,7 @@ const Dashboard = () => {
                           </p>
                         </div>
                         <span className={cn('font-semibold whitespace-nowrap', urgent ? 'text-destructive' : 'text-warning')}>
-                          {fmtMoney(c.minimumPayment && c.minimumPayment > 0 ? c.minimumPayment : (c.lastStatementBalance ?? c.currentBalance))}
+                          {fmtMoney(c.lastStatementBalance ?? c.currentBalance)}
                         </span>
                       </button>
                     );
