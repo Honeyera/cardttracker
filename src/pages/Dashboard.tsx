@@ -951,7 +951,7 @@ function CardTile({ card, adSpend, paidTowardStatement, onClick }: { card: Finan
       <div className="p-4 flex flex-col gap-3 flex-1">
         <div>
           <p className="text-xs text-muted-foreground">Balance</p>
-          <p className="text-2xl font-bold text-card-foreground">{fmtMoney(card.currentBalance)}</p>
+          <p className="text-2xl font-bold text-card-foreground">{fmtMoney(card.currentBalance, { cents: true })}</p>
         </div>
 
         {utilization != null && (
