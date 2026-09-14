@@ -229,7 +229,7 @@ const Dashboard = () => {
     [brandTxns, activityFrom],
   );
   // Income counts deposits + refunds; spending counts purchases + fees.
-  const income = activityTxns.filter((t) => t.type === 'income' || t.type === 'refund').reduce((s, t) => s + t.amount, 0);
+  const income = activityTxns.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const spend = activityTxns.filter((t) => t.type === 'expense' || t.type === 'fee').reduce((s, t) => s + t.amount, 0);
   // Card payments are recorded twice — once as the bank outflow (account_id, no
   // card) and once on the card that received it (credit_card_id). Count only the
@@ -256,7 +256,7 @@ const Dashboard = () => {
     if (!activityDetail) return null;
     const cfg = {
       income: { title: 'Income', tone: 'success' as Tone, calc: 'Deposits and refunds (money in)',
-        txns: activityTxns.filter((t) => t.type === 'income' || t.type === 'refund') },
+        txns: activityTxns.filter((t) => t.type === 'income') },
       spend: { title: 'Spending', tone: 'warning' as Tone, calc: 'Purchases and fees (money out) — excludes card payments & transfers',
         txns: activityTxns.filter((t) => t.type === 'expense' || t.type === 'fee') },
       payments: { title: 'Card Payments', tone: 'muted' as Tone, calc: 'Cash paid from bank accounts toward cards (each payment counted once)',
