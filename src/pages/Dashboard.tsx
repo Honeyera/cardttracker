@@ -1063,8 +1063,8 @@ function isoYearStart(): string {
 }
 
 type Flow = 'all' | 'in' | 'out' | 'ads';
-const isMoneyIn = (t: FinanceTransaction) => t.type === 'income';
-const isMoneyOut = (t: FinanceTransaction) => t.type === 'expense' || t.type === 'payment';
+const isMoneyIn = (t: FinanceTransaction) => t.type === 'income' || t.type === 'refund';
+const isMoneyOut = (t: FinanceTransaction) => t.type === 'expense' || t.type === 'payment' || t.type === 'fee';
 
 function TransactionsPanel({ transactions, resetKey, showAdsFilter }: {
   transactions: FinanceTransaction[]; resetKey: string; showAdsFilter?: boolean;
@@ -1199,7 +1199,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function TxnRow({ txn, source }: { txn: FinanceTransaction; source?: string | null }) {
-  const inflow = txn.type === 'income';
+  const inflow = txn.type === 'income' || txn.type === 'refund';
   const isPayment = txn.type === 'payment';
   return (
     <div className="flex items-center justify-between py-1.5">
