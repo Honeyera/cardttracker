@@ -228,9 +228,11 @@ const Dashboard = () => {
     () => brandTxns.filter((t) => !activityFrom || t.date >= activityFrom),
     [brandTxns, activityFrom],
   );
-  // Income counts deposits + refunds; spending counts purchases + fees.
+  // Income = real deposits only (refunds are money-back on purchases, not revenue).
+  // Spending = purchases + fees, net of refunds (a refund reverses a purchase).
   const income = activityTxns.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const spend = activityTxns.filter((t) => t.type === 'expense' || t.type === 'fee').reduce((s, t) => s + t.amount, 0);
+  const refunds = activityTxns.filter((t) => t.type === 'refund').reduce((s, t) => s + t.amount, 0);
+  const spend = activityTxns.filter((t) => t.type === 'expense' || t.type === 'fee').reduce((s, t) => s + t.amount, 0) - refunds;
   // Card payments are recorded twice — once as the bank outflow (account_id, no
   // card) and once on the card that received it (credit_card_id). Count only the
   // bank-side outflow to avoid double-counting the same payment.
@@ -255,10 +257,14 @@ const Dashboard = () => {
   const activityBreakdown = useMemo(() => {
     if (!activityDetail) return null;
     const cfg = {
-      income: { title: 'Income', tone: 'success' as Tone, calc: 'Deposits and refunds (money in)',
+      income: { title: 'Income', tone: 'success' as Tone, calc: 'Deposits only (revenue). Refunds are not income.',
         txns: activityTxns.filter((t) => t.type === 'income') },
-      spend: { title: 'Spending', tone: 'warning' as Tone, calc: 'Purchases and fees (money out) — excludes card payments & transfers',
-        txns: activityTxns.filter((t) => t.type === 'expense' || t.type === 'fee') },
+      spend: { title: 'Spending', tone: 'warning' as Tone, calc: 'Purchases + fees, net of refunds (refunds shown as negative). Excludes card payments & transfers.',
+        txns: [
+          ...activityTxns.filter((t) => t.type === 'expense' || t.type === 'fee'),
+          // Refunds subtract from spending — show them as negative line items.
+          ...activityTxns.filter((t) => t.type === 'refund').map((t) => ({ ...t, amount: -t.amount })),
+        ] },
       payments: { title: 'Card Payments', tone: 'muted' as Tone, calc: 'Cash paid from bank accounts toward cards (each payment counted once)',
         txns: payments },
     }[activityDetail];
