@@ -107,7 +107,7 @@ function interestRisk(card: FinanceCard, paidTowardStatement: number): { paid: n
   if (paidTowardStatement + 0.005 >= stmt) return null; // statement fully paid (across any number of payments)
   // You can't accrue interest on more than you currently owe; if what's left is
   // within the minimum payment, treat the statement as effectively paid.
-  const atRisk = Math.min(stmt - paidTowardStatement, card.totalBalance);
+  const atRisk = Math.min(stmt - paidTowardStatement, card.currentBalance);
   if (atRisk <= Math.max(1, card.minimumPayment ?? 0) + 0.005) return null;
   return { paid: paidTowardStatement, statement: stmt, remaining: atRisk };
 }
@@ -128,7 +128,7 @@ function nextClosingDays(card: FinanceCard): number {
 }
 
 function utilization(card: FinanceCard): number {
-  return card.creditLimit > 0 ? card.totalBalance / card.creditLimit : -1;
+  return card.creditLimit > 0 ? card.currentBalance / card.creditLimit : -1;
 }
 
 type CardSort = 'urgency' | 'due' | 'closing' | 'balance' | 'limit' | 'utilization' | 'name';
@@ -151,7 +151,7 @@ function compareCards(a: FinanceCard, b: FinanceCard, sort: CardSort): number {
       return da - db;
     }
     case 'closing': return nextClosingDays(a) - nextClosingDays(b);
-    case 'balance': return b.totalBalance - a.totalBalance;
+    case 'balance': return b.currentBalance - a.currentBalance;
     case 'limit': return b.creditLimit - a.creditLimit;
     case 'utilization': return utilization(b) - utilization(a);
     case 'name': return a.name.localeCompare(b.name);
@@ -205,10 +205,10 @@ const Dashboard = () => {
 
   // ── Top-line numbers ────────────────────────────────────────────────
   const availableCash = depository.reduce((s, a) => s + a.currentBalance, 0);
-  const totalCardDebt = visibleCards.reduce((s, c) => s + c.totalBalance, 0);
+  const totalCardDebt = visibleCards.reduce((s, c) => s + c.currentBalance, 0);
   const statementDue = visibleCards.reduce((s, c) => s + c.currentBalance, 0);
   const creditAvailable = visibleCards.reduce(
-    (s, c) => s + Math.max(0, c.creditLimit - c.totalBalance), 0,
+    (s, c) => s + Math.max(0, c.creditLimit - c.currentBalance), 0,
   );
 
   const dueSoon = useMemo(() => {
@@ -887,7 +887,7 @@ function CardTile({ card, adSpend, paidTowardStatement, onClick }: { card: Finan
   const settled = isSettled(card);
   const risk = interestRisk(card, paidTowardStatement);
   const gradient = cardColorClasses[(card.color as CardColor)] ?? cardColorClasses.navy;
-  const utilization = card.creditLimit > 0 ? Math.min(1, card.totalBalance / card.creditLimit) : null;
+  const utilization = card.creditLimit > 0 ? Math.min(1, card.currentBalance / card.creditLimit) : null;
 
   // Amount to pay now: the remaining statement balance. Fallbacks cover odd
   // synced states (an overdue card can report a zero statement remainder).
@@ -951,7 +951,7 @@ function CardTile({ card, adSpend, paidTowardStatement, onClick }: { card: Finan
       <div className="p-4 flex flex-col gap-3 flex-1">
         <div>
           <p className="text-xs text-muted-foreground">Balance</p>
-          <p className="text-2xl font-bold text-card-foreground">{fmtMoney(card.totalBalance)}</p>
+          <p className="text-2xl font-bold text-card-foreground">{fmtMoney(card.currentBalance)}</p>
         </div>
 
         {utilization != null && (
@@ -1134,7 +1134,7 @@ function CardDetailDialog({ card, adSpend, transactions, onClose }: {
               <DialogTitle>{card.name} <span className="text-muted-foreground font-normal">•••• {card.lastFour}</span></DialogTitle>
             </DialogHeader>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <Field label="Total Balance (owed now)">{fmtMoney(card.totalBalance, { cents: true })}</Field>
+              <Field label="Current Balance (owed now)">{fmtMoney(card.currentBalance, { cents: true })}</Field>
               <Field label="Last Statement">
                 {card.lastStatementBalance != null ? fmtMoney(card.lastStatementBalance, { cents: true }) : '—'}
                 {(card.lastStatementBalance ?? 0) > 0.005 && isSettled(card) && <span className="text-success font-normal"> · paid</span>}
