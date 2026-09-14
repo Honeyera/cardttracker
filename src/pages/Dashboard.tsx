@@ -602,7 +602,7 @@ const Dashboard = () => {
                 ) : (
                   <div className="space-y-2 mt-3">
                     {payments.slice(0, 8).map((t) => (
-                      <TxnRow key={t.id} txn={t} cardName={cardName(t.creditCardId)} />
+                      <TxnRow key={t.id} txn={t} source={sourceOf(t)} />
                     ))}
                   </div>
                 )}
@@ -614,7 +614,7 @@ const Dashboard = () => {
                 ) : (
                   <div className="space-y-2 mt-3">
                     {brandTxns.filter((t) => t.type !== 'payment').slice(0, 8).map((t) => (
-                      <TxnRow key={t.id} txn={t} cardName={cardName(t.creditCardId)} />
+                      <TxnRow key={t.id} txn={t} source={sourceOf(t)} />
                     ))}
                   </div>
                 )}
@@ -1113,7 +1113,7 @@ function TransactionsPanel({ transactions, resetKey, showAdsFilter }: {
         <p className="text-sm text-muted-foreground py-4 text-center">No transactions in this date range.</p>
       ) : (
         <div className="space-y-1">
-          {filtered.map((t) => <TxnRow key={t.id} txn={t} cardName={null} />)}
+          {filtered.map((t) => <TxnRow key={t.id} txn={t}  />)}
         </div>
       )}
     </div>
@@ -1188,7 +1188,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function TxnRow({ txn, cardName }: { txn: FinanceTransaction; cardName: string | null }) {
+function TxnRow({ txn, source }: { txn: FinanceTransaction; source?: string | null }) {
   const inflow = txn.type === 'income';
   const isPayment = txn.type === 'payment';
   return (
@@ -1202,8 +1202,8 @@ function TxnRow({ txn, cardName }: { txn: FinanceTransaction; cardName: string |
           <p className="font-medium truncate">{txn.merchantName || txn.description}</p>
           <p className="text-xs text-muted-foreground truncate">
             {format(parseISO(txn.date), 'MMM d')}
+            {source ? ` · ${source}` : ''}
             {txn.category ? ` · ${txn.category}` : ''}
-            {cardName ? ` · ${cardName}` : ''}
             {txn.isPending ? ' · pending' : ''}
           </p>
         </div>
