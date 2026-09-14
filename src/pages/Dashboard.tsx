@@ -255,6 +255,24 @@ const Dashboard = () => {
     return 'Unlinked';
   };
 
+  // A bank-side payment has no card link, but the same payment is also recorded
+  // on the card that received it. Match by amount + nearest date to find which
+  // card a payment went to.
+  const cardSidePayments = useMemo(
+    () => transactions.filter((t) => t.type === 'payment' && t.creditCardId),
+    [transactions],
+  );
+  const paymentDestCard = (t: FinanceTransaction): string | null => {
+    if (t.creditCardId) return sourceOf(t); // already card-linked
+    const matches = cardSidePayments.filter((c) => Math.abs(c.amount - t.amount) < 0.005);
+    if (matches.length === 0) return null;
+    matches.sort((a, b) =>
+      Math.abs(differenceInCalendarDays(parseISO(a.date), parseISO(t.date))) -
+      Math.abs(differenceInCalendarDays(parseISO(b.date), parseISO(t.date))));
+    const c = cards.find((c) => c.id === matches[0].creditCardId);
+    return c ? (c.lastFour ? `${c.name} ••${c.lastFour}` : c.name) : null;
+  };
+
   const periodLabel = activityPeriod === 'month' ? 'This month'
     : activityPeriod === '30d' ? 'Last 30 days'
     : activityPeriod === '90d' ? 'Last 90 days'
@@ -614,7 +632,7 @@ const Dashboard = () => {
                 ) : (
                   <div className="space-y-2 mt-3">
                     {payments.slice(0, 8).map((t) => (
-                      <TxnRow key={t.id} txn={t} source={sourceOf(t)} />
+                      <TxnRow key={t.id} txn={t} source={paymentDestCard(t) ? `→ ${paymentDestCard(t)}` : sourceOf(t)} />
                     ))}
                   </div>
                 )}
