@@ -244,8 +244,14 @@ const Dashboard = () => {
 
   // Which bank/card a transaction came from (for the breakdown view).
   const sourceOf = (t: FinanceTransaction): string => {
-    if (t.creditCardId) return cards.find((c) => c.id === t.creditCardId)?.name ?? 'Card';
-    if (t.accountId) return accounts.find((a) => a.id === t.accountId)?.name ?? 'Account';
+    if (t.creditCardId) {
+      const c = cards.find((c) => c.id === t.creditCardId);
+      if (c) return c.lastFour ? `${c.name} ••${c.lastFour}` : c.name;
+    }
+    if (t.accountId) {
+      const a = accounts.find((a) => a.id === t.accountId);
+      if (a) return a.lastFour ? `${a.name} ••${a.lastFour}` : a.name;
+    }
     return 'Unlinked';
   };
 
@@ -1216,9 +1222,9 @@ function TxnRow({ txn, source }: { txn: FinanceTransaction; source?: string | nu
         </div>
         <div className="min-w-0">
           <p className="font-medium truncate">{txn.merchantName || txn.description}</p>
+          {source && <p className="text-xs font-medium text-foreground/70 truncate">{source}</p>}
           <p className="text-xs text-muted-foreground truncate">
             {format(parseISO(txn.date), 'MMM d')}
-            {source ? ` · ${source}` : ''}
             {txn.category ? ` · ${txn.category}` : ''}
             {txn.isPending ? ' · pending' : ''}
           </p>
