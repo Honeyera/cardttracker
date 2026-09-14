@@ -66,14 +66,19 @@ export function UploadPointsScreenshotDialog({
   const findCard = (parsed: ParsedPointsCard): CreditCard | null => {
     const digits = normalizeDigits(parsed.lastFiveDigits);
     if (digits !== '00000') {
-      const byDigits = existingCards.find(
-        (c) => normalizeDigits(c.lastFiveDigits) === digits
-      );
-      if (byDigits) return byDigits;
+      // Digits present → match ONLY by digits. Never fall back to a name guess:
+      // several cards share the name "Business Gold Card", so name-matching an
+      // unmatched-by-digits card would wrongly attach it to a different card and
+      // overwrite its points. No digit match → unmatched (surfaced to the user).
+      return existingCards.find((c) => normalizeDigits(c.lastFiveDigits) === digits) ?? null;
     }
-    // Fallback: fuzzy name match
+    // No digits on the screenshot: a name match is only safe when it's
+    // unambiguous. If more than one card shares the name, don't guess.
     const nameLower = parsed.name.toLowerCase();
-    return existingCards.find((c) => c.name.toLowerCase().includes(nameLower) || nameLower.includes(c.name.toLowerCase())) ?? null;
+    const nameMatches = existingCards.filter(
+      (c) => c.name.toLowerCase().includes(nameLower) || nameLower.includes(c.name.toLowerCase())
+    );
+    return nameMatches.length === 1 ? nameMatches[0] : null;
   };
 
   // A screenshot showing fewer points than we have stored is only worth
