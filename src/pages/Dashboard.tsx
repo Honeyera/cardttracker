@@ -962,6 +962,7 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
           <p className="text-xs text-white/80 truncate">
             {card.lastFour ? `•••• ${card.lastFour}` : ''}{card.companyName ? ` · ${card.companyName}` : ''}
           </p>
+          {card.ownerName && <p className="text-xs text-white/70 truncate">{card.ownerName}</p>}
         </div>
         {points != null && (
           <div className="text-right shrink-0 leading-tight">
