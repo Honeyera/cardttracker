@@ -112,9 +112,9 @@ function interestRisk(card: FinanceCard, paidTowardStatement: number): { paid: n
 }
 
 // Lower rank = more urgent (sorts first). Overdue < due-soon (by days) < settled.
-function urgencyRank(card: FinanceCard): number {
+function urgencyRank(card: FinanceCard, paidTowardStatement = 0): number {
   if (card.isOverdue) return -100000;
-  if (isSettled(card)) return 100000;
+  if (isSettled(card, paidTowardStatement)) return 100000;
   const due = resolveDue(card);
   return due ? due.days : 99999; // no due date → near the end, but before settled
 }
@@ -142,7 +142,7 @@ const CARD_SORT_OPTIONS: { value: CardSort; label: string }[] = [
   { value: 'name', label: 'Name (A→Z)' },
 ];
 
-function compareCards(a: FinanceCard, b: FinanceCard, sort: CardSort): number {
+function compareCards(a: FinanceCard, b: FinanceCard, sort: CardSort, paidFor: (id: string) => number = () => 0): number {
   switch (sort) {
     case 'due': {
       const da = resolveDue(a)?.days ?? 999999;
@@ -154,7 +154,7 @@ function compareCards(a: FinanceCard, b: FinanceCard, sort: CardSort): number {
     case 'limit': return b.creditLimit - a.creditLimit;
     case 'utilization': return utilization(b) - utilization(a);
     case 'name': return a.name.localeCompare(b.name);
-    default: return urgencyRank(a) - urgencyRank(b);
+    default: return urgencyRank(a, paidFor(a.id)) - urgencyRank(b, paidFor(b.id));
   }
 }
 
@@ -181,10 +181,30 @@ const Dashboard = () => {
     [cards, accounts],
   );
 
+  // Total paid toward each card's current statement (payments on/after its close
+  // date), from transactions — handles installment payments.
+  const paidTowardStatementByCard = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of transactions) {
+      if (t.type !== 'payment' || !t.creditCardId) continue;
+      const card = cards.find((c) => c.id === t.creditCardId);
+      if (card?.lastStatementDate && t.date >= card.lastStatementDate) {
+        m.set(t.creditCardId, (m.get(t.creditCardId) ?? 0) + t.amount);
+      }
+    }
+    for (const c of cards) {
+      if (c.lastPaymentAmount && c.lastPaymentDate && c.lastStatementDate && c.lastPaymentDate >= c.lastStatementDate) {
+        m.set(c.id, Math.max(m.get(c.id) ?? 0, c.lastPaymentAmount));
+      }
+    }
+    return m;
+  }, [transactions, cards]);
+  const paidFor = (id: string) => paidTowardStatementByCard.get(id) ?? 0;
+
   const visibleCards = useMemo(() => {
     const filtered = company === 'all' ? cards : cards.filter((c) => c.companyName === company);
-    return [...filtered].sort((a, b) => compareCards(a, b, cardSort));
-  }, [cards, company, cardSort]);
+    return [...filtered].sort((a, b) => compareCards(a, b, cardSort, paidFor));
+  }, [cards, company, cardSort, paidTowardStatementByCard]);
 
   const depository = useMemo(
     () => accounts
@@ -209,26 +229,6 @@ const Dashboard = () => {
   const creditAvailable = visibleCards.reduce(
     (s, c) => s + Math.max(0, c.creditLimit - c.currentBalance), 0,
   );
-
-  // Total paid toward each card's current statement (payments on/after its close
-  // date), from transactions — handles installment payments.
-  const paidTowardStatementByCard = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const t of transactions) {
-      if (t.type !== 'payment' || !t.creditCardId) continue;
-      const card = cards.find((c) => c.id === t.creditCardId);
-      if (card?.lastStatementDate && t.date >= card.lastStatementDate) {
-        m.set(t.creditCardId, (m.get(t.creditCardId) ?? 0) + t.amount);
-      }
-    }
-    for (const c of cards) {
-      if (c.lastPaymentAmount && c.lastPaymentDate && c.lastStatementDate && c.lastPaymentDate >= c.lastStatementDate) {
-        m.set(c.id, Math.max(m.get(c.id) ?? 0, c.lastPaymentAmount));
-      }
-    }
-    return m;
-  }, [transactions, cards]);
-  const paidFor = (id: string) => paidTowardStatementByCard.get(id) ?? 0;
 
   const dueSoon = useMemo(() => {
     return visibleCards
@@ -318,7 +318,7 @@ const Dashboard = () => {
   const attentionCards = useMemo(
     () => visibleCards
       .filter((c) => c.isOverdue || (() => { const d = resolveDue(c); return d && d.days <= 7 && !isSettled(c, paidFor(c.id)); })())
-      .sort((a, b) => urgencyRank(a) - urgencyRank(b)),
+      .sort((a, b) => urgencyRank(a, paidFor(a.id)) - urgencyRank(b, paidFor(b.id))),
     [visibleCards],
   );
   const openAlerts = useMemo(
