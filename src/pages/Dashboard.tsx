@@ -919,11 +919,11 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
   const gradient = cardColorClasses[(card.color as CardColor)] ?? cardColorClasses.navy;
   const utilization = card.creditLimit > 0 ? Math.min(1, card.currentBalance / card.creditLimit) : null;
 
-  // Amount to pay now: the remaining statement balance. Fallbacks cover odd
-  // synced states (an overdue card can report a zero statement remainder).
-  const payAmount = card.currentBalance > 0.005
-    ? card.currentBalance
-    : (card.minimumPayment || card.lastStatementBalance || card.totalBalance);
+  // Amount to pay: the statement balance (what's due for the cycle), with
+  // fallbacks for odd synced states.
+  const payAmount = (card.lastStatementBalance && card.lastStatementBalance > 0.005)
+    ? card.lastStatementBalance
+    : (card.currentBalance || card.minimumPayment || card.totalBalance);
 
   // One status strip per tile: do I need to act, how much, by when.
   let strip: { tone: Tone; icon: React.ComponentType<{ className?: string }>; text: string };
