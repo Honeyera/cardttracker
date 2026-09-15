@@ -64,7 +64,7 @@ function resolveDue(card: FinanceCard): { date: Date; days: number } | null {
 
 // A card has nothing due when the sync says so (payment_status / zero minimum)
 // or the statement balance is cleared — even if a running balance remains.
-function isSettled(card: FinanceCard): boolean {
+function isSettled(card: FinanceCard, paidTowardStatement = 0): boolean {
   if (card.isOverdue) return false;
   const s = (card.paymentStatus ?? '').toLowerCase().replace(/[‘’′]/g, "'");
   if (
@@ -78,17 +78,16 @@ function isSettled(card: FinanceCard): boolean {
   if (card.currentBalance <= 0.005) return true;
   // No statement/minimum owed and no upcoming explicit due amount → nothing due.
   if ((card.minimumPayment ?? 0) <= 0.005 && (card.lastStatementBalance ?? 0) <= 0.005) return true;
-  // Statement fully covered: a payment on/after the statement date that meets or
-  // exceeds the statement balance means the statement is paid, and any remaining
-  // balance is next-cycle spending — nothing is due now.
-  if (
-    (card.lastStatementBalance ?? 0) > 0.005 &&
-    card.lastPaymentAmount != null &&
-    card.lastPaymentDate != null &&
-    card.lastStatementDate != null &&
-    card.lastPaymentAmount + 0.005 >= card.lastStatementBalance! &&
-    card.lastPaymentDate >= card.lastStatementDate
-  ) return true;
+  // Statement fully covered by payments since it closed (handles installments) —
+  // any remaining balance is next-cycle spending, so nothing is due now.
+  const stmt = card.lastStatementBalance ?? 0;
+  if (stmt > 0.005) {
+    if (paidTowardStatement + 0.005 >= stmt) return true;
+    if (
+      card.lastPaymentAmount != null && card.lastPaymentDate != null && card.lastStatementDate != null &&
+      card.lastPaymentAmount + 0.005 >= stmt && card.lastPaymentDate >= card.lastStatementDate
+    ) return true;
+  }
   return false;
 }
 
@@ -100,7 +99,7 @@ function isSettled(card: FinanceCard): boolean {
 // closed (from the transaction history) — more accurate than the single stored
 // last_payment_amount, which misses installment payments.
 function interestRisk(card: FinanceCard, paidTowardStatement: number): { paid: number; statement: number; remaining: number } | null {
-  if (isSettled(card)) return null;
+  if (isSettled(card, paidTowardStatement)) return null;
   const stmt = card.lastStatementBalance ?? 0;
   if (stmt <= 0.005) return null;
   if (paidTowardStatement <= 0.005) return null; // nothing paid → a "due" case, not underpayment
@@ -211,10 +210,30 @@ const Dashboard = () => {
     (s, c) => s + Math.max(0, c.creditLimit - c.currentBalance), 0,
   );
 
+  // Total paid toward each card's current statement (payments on/after its close
+  // date), from transactions — handles installment payments.
+  const paidTowardStatementByCard = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of transactions) {
+      if (t.type !== 'payment' || !t.creditCardId) continue;
+      const card = cards.find((c) => c.id === t.creditCardId);
+      if (card?.lastStatementDate && t.date >= card.lastStatementDate) {
+        m.set(t.creditCardId, (m.get(t.creditCardId) ?? 0) + t.amount);
+      }
+    }
+    for (const c of cards) {
+      if (c.lastPaymentAmount && c.lastPaymentDate && c.lastStatementDate && c.lastPaymentDate >= c.lastStatementDate) {
+        m.set(c.id, Math.max(m.get(c.id) ?? 0, c.lastPaymentAmount));
+      }
+    }
+    return m;
+  }, [transactions, cards]);
+  const paidFor = (id: string) => paidTowardStatementByCard.get(id) ?? 0;
+
   const dueSoon = useMemo(() => {
     return visibleCards
       .map((c) => ({ card: c, due: resolveDue(c) }))
-      .filter((x) => x.due && x.due.days >= 0 && x.due.days <= 7 && !isSettled(x.card))
+      .filter((x) => x.due && x.due.days >= 0 && x.due.days <= 7 && !isSettled(x.card, paidFor(x.card.id)))
       .sort((a, b) => (a.due!.days - b.due!.days));
   }, [visibleCards]);
   const dueSoonTotal = dueSoon.reduce((s, x) => s + x.card.currentBalance, 0);
@@ -298,7 +317,7 @@ const Dashboard = () => {
   // Cards needing attention: overdue, or due within 7 days with a balance owed.
   const attentionCards = useMemo(
     () => visibleCards
-      .filter((c) => c.isOverdue || (() => { const d = resolveDue(c); return d && d.days <= 7 && !isSettled(c); })())
+      .filter((c) => c.isOverdue || (() => { const d = resolveDue(c); return d && d.days <= 7 && !isSettled(c, paidFor(c.id)); })())
       .sort((a, b) => urgencyRank(a) - urgencyRank(b)),
     [visibleCards],
   );
@@ -309,23 +328,6 @@ const Dashboard = () => {
 
   // Total paid toward each card's current statement (sum of payments on/after the
   // statement close date), from actual transactions — handles installments.
-  const paidTowardStatementByCard = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const t of transactions) {
-      if (t.type !== 'payment' || !t.creditCardId) continue;
-      const card = cards.find((c) => c.id === t.creditCardId);
-      if (card?.lastStatementDate && t.date >= card.lastStatementDate) {
-        m.set(t.creditCardId, (m.get(t.creditCardId) ?? 0) + t.amount);
-      }
-    }
-    // Floor by the stored last payment in case a payment isn't in the tx history.
-    for (const c of cards) {
-      if (c.lastPaymentAmount && c.lastPaymentDate && c.lastStatementDate && c.lastPaymentDate >= c.lastStatementDate) {
-        m.set(c.id, Math.max(m.get(c.id) ?? 0, c.lastPaymentAmount));
-      }
-    }
-    return m;
-  }, [transactions, cards]);
 
   // Cards where the statement was underpaid → interest will accrue.
   const interestRiskCards = useMemo(
@@ -914,7 +916,7 @@ function Flow({ label, value, icon: Icon, tone, onClick }: {
 
 function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { card: FinanceCard; adSpend?: AdSpendStatus; paidTowardStatement: number; points?: number; onClick?: () => void }) {
   const due = resolveDue(card);
-  const settled = isSettled(card);
+  const settled = isSettled(card, paidTowardStatement);
   const risk = interestRisk(card, paidTowardStatement);
   const gradient = cardColorClasses[(card.color as CardColor)] ?? cardColorClasses.navy;
   const utilization = card.creditLimit > 0 ? Math.min(1, card.currentBalance / card.creditLimit) : null;
