@@ -41,6 +41,22 @@ serve(async (req) => {
       "If the provided data does not contain enough information to answer (e.g. the question needs older history than what's included), say so plainly rather than guessing. " +
       "Do not invent numbers.";
 
+    // Model is configurable via the ASK_MODEL secret; defaults to the cheap Haiku.
+    const model = Deno.env.get("ASK_MODEL") ?? "claude-haiku-4-5";
+    const payload: Record<string, unknown> = {
+      model,
+      max_tokens: 1024,
+      system,
+      messages: [
+        {
+          role: "user",
+          content: `DATA:\n${JSON.stringify(context).slice(0, 180000)}\n\nQUESTION: ${question}`,
+        },
+      ],
+    };
+    // Effort control is only supported on Opus/Sonnet/Fable, not Haiku.
+    if (!model.includes("haiku")) payload.output_config = { effort: "low" };
+
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -48,18 +64,7 @@ serve(async (req) => {
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        model: "claude-opus-5",
-        max_tokens: 1024,
-        output_config: { effort: "low" },
-        system,
-        messages: [
-          {
-            role: "user",
-            content: `DATA:\n${JSON.stringify(context).slice(0, 180000)}\n\nQUESTION: ${question}`,
-          },
-        ],
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!anthropicRes.ok) {
