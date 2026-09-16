@@ -26,3 +26,7 @@ verify_jwt = false
 # caller's JWT in-code. Must be deployed with JWT enforcement OFF.
 [functions.mfa]
 verify_jwt = false
+
+# AI "Ask" Q&A over the user's finance data. Verifies the caller's JWT in-code.
+[functions.ask]
+verify_jwt = false

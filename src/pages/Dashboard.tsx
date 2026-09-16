@@ -7,6 +7,7 @@ import { getNextOccurrence } from '@/utils/dateUtils';
 import { adSpendLimitFor, computeAdSpend, isAdTransaction, AdSpendStatus } from '@/utils/adSpend';
 import { cardColorClasses, CardColor } from '@/types/creditCard';
 import { UserMenu } from '@/components/UserMenu';
+import { AskBox } from '@/components/AskBox';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -533,6 +534,9 @@ const Dashboard = () => {
                 </div>
               </div>
             )}
+
+            {/* AI Ask */}
+            <AskBox accounts={accounts} cards={cards} transactions={transactions} />
 
             {/* KPI row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
