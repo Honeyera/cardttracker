@@ -48,12 +48,17 @@ serve(async (req) => {
       if (args.end_date) q = q.lte("transaction_date", args.end_date);
       if (args.transaction_type) q = q.eq("transaction_type", args.transaction_type);
       if (args.description_contains) {
-        const s = String(args.description_contains).replace(/[%,]/g, "");
-        q = q.or(`description.ilike.%${s}%,merchant_name.ilike.%${s}%`);
+        // Accept comma-separated terms — matched as OR across description + merchant.
+        const terms = String(args.description_contains).split(",").map((x) => x.trim().replace(/[%,]/g, "")).filter(Boolean);
+        const ors = terms.flatMap((t) => [`description.ilike.%${t}%`, `merchant_name.ilike.%${t}%`]);
+        if (ors.length) q = q.or(ors.join(","));
       }
       if (args.card_last_four) {
         const digits = String(args.card_last_four).replace(/\D/g, "");
-        const ids = (cards ?? []).filter((c: any) => (c.last_four || "").replace(/\D/g, "").endsWith(digits)).map((c: any) => c.id);
+        const ids = (cards ?? []).filter((c: any) => {
+          const cd = (c.last_four || "").replace(/\D/g, "");
+          return cd && (cd.endsWith(digits) || digits.endsWith(cd) || cd === digits);
+        }).map((c: any) => c.id);
         if (ids.length) q = q.in("credit_card_id", ids); else return { rows: [], note: "No card matched that last-four." };
       }
       q = q.order("transaction_date", { ascending: false }).limit(5000);
@@ -109,7 +114,9 @@ serve(async (req) => {
       "You are a financial assistant for a personal/business finance dashboard. You can query the user's COMPLETE transaction history with the query_transactions tool — always use it for anything about spending, income, merchants, totals, or trends, rather than guessing or saying you lack history. " +
       "Make multiple tool calls if needed (e.g. per card, or to aggregate by month). All amounts are USD. Be concise and specific; include dates, amounts, and which card/account. " +
       "Credit-card 'refund'/'income' rows are money back (not revenue); 'payment' rows are card payments. Never invent numbers — base every figure on tool results. " +
-      "The accounts and cards are provided in the first message.";
+      "The accounts and cards are provided in the first message; use the exact last_four shown there (it may be 5 digits) for card_last_four. " +
+      "IMPORTANT — advertising/ad spend appears under many merchant names in this data, NOT the word 'advertising'. When asked about advertising or ads, pass these as comma-separated terms in description_contains: 'sponsored,marketing svcs,marketing services,advertis,ads,tiktok ads,google ads,meta,facebook,product ads', and sum across all matches. " +
+      "description_contains accepts comma-separated terms (OR-matched), so search several name variants in one call.";
 
     const model = Deno.env.get("ASK_MODEL") ?? "claude-haiku-4-5";
     const messages: any[] = [{
