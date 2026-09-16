@@ -15,7 +15,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceD
 import {
   Wallet, LayoutDashboard, CreditCard as CardIcon, Trophy, Loader2, Building2,
   ArrowDownRight, ArrowUpRight, Landmark, TrendingUp, TrendingDown, AlertTriangle,
-  CheckCircle2, CalendarClock, RefreshCw, Bell, ChevronRight, Percent, Megaphone,
+  CheckCircle2, CalendarClock, RefreshCw, Bell, ChevronRight, Percent, Megaphone, X,
 } from 'lucide-react';
 
 const fmtMoney = (n: number, opts: { cents?: boolean } = {}) =>
@@ -168,6 +168,17 @@ const Dashboard = () => {
   const [activityPeriod, setActivityPeriod] = useState<'month' | '30d' | '90d' | 'ytd' | 'all'>('month');
   const [cardSort, setCardSort] = useState<CardSort>('urgency');
   const [activityDetail, setActivityDetail] = useState<null | 'income' | 'spend' | 'payments'>(null);
+  // Dismissed alerts, keyed by a per-cycle signature so they return when action
+  // is next needed (e.g. new due date / new statement). Persisted per browser.
+  const [dismissed, setDismissed] = useState<Set<string>>(() => {
+    try { return new Set<string>(JSON.parse(localStorage.getItem('ct_dismissed_alerts') || '[]')); }
+    catch { return new Set<string>(); }
+  });
+  const dismiss = (sig: string) => setDismissed((prev) => {
+    const next = new Set(prev); next.add(sig);
+    try { localStorage.setItem('ct_dismissed_alerts', JSON.stringify([...next])); } catch { /* ignore */ }
+    return next;
+  });
 
   useEffect(() => {
     if (!authLoading && !user) navigate('/auth');
@@ -354,6 +365,19 @@ const Dashboard = () => {
     [visibleCards, adSpendByCard],
   );
 
+  // Per-cycle dismiss signatures — change when action is next required, so a
+  // dismissed alert reappears (new due date, new statement, next year, etc.).
+  const thisYear = new Date().getFullYear();
+  const dueSig = (c: FinanceCard) => `due:${c.id}:${resolveDue(c)?.date.toISOString().slice(0, 10) ?? 'na'}`;
+  const riskSig = (card: FinanceCard) => `risk:${card.id}:${card.lastStatementDate ?? 'na'}`;
+  const adSig = (card: FinanceCard, ad: AdSpendStatus) => `ad:${card.id}:${thisYear}:${Math.floor(ad.fraction * 10)}`;
+  const alertSig = (a: FinanceAlert) => `alert:${a.id}`;
+
+  const shownAttention = attentionCards.filter((c) => !dismissed.has(dueSig(c)));
+  const shownInterest = interestRiskCards.filter(({ card }) => !dismissed.has(riskSig(card)));
+  const shownAdSpend = adSpendWarnings.filter(({ card, ad }) => !dismissed.has(adSig(card, ad)));
+  const shownAlerts = openAlerts.filter((a) => !dismissed.has(alertSig(a)));
+
   // Forecast: lowest projected balance point over the horizon.
   const lowestPoint = useMemo(() => {
     if (forecast.length === 0) return null;
@@ -431,19 +455,18 @@ const Dashboard = () => {
         ) : (
           <>
             {/* Needs Attention */}
-            {(attentionCards.length > 0 || openAlerts.length > 0 || interestRiskCards.length > 0 || adSpendWarnings.length > 0) && (
+            {(shownAttention.length > 0 || shownAlerts.length > 0 || shownInterest.length > 0 || shownAdSpend.length > 0) && (
               <div className="rounded-2xl border border-warning/40 bg-warning/5 p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <Bell className="w-4 h-4 text-warning" />
                   <h3 className="font-semibold text-foreground">Needs Attention</h3>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {attentionCards.map((c) => {
+                  {shownAttention.map((c) => {
                     const due = resolveDue(c);
                     const urgent = c.isOverdue || (due != null && due.days <= 3);
                     return (
-                      <button key={c.id} onClick={() => setSelectedCard(c)}
-                        className="flex items-center justify-between gap-2 text-left rounded-lg bg-card border border-border px-3 py-2 hover:border-warning/50 transition-colors">
+                      <AttentionItem key={c.id} onOpen={() => setSelectedCard(c)} onDismiss={() => dismiss(dueSig(c))}>
                         <div className="min-w-0">
                           <p className="font-medium truncate">{c.name} <span className="text-muted-foreground font-normal">••{c.lastFour}</span></p>
                           <p className="text-xs text-muted-foreground">
@@ -454,12 +477,11 @@ const Dashboard = () => {
                         <span className={cn('font-semibold whitespace-nowrap', urgent ? 'text-destructive' : 'text-warning')}>
                           {fmtMoney(c.lastStatementBalance ?? c.currentBalance)}
                         </span>
-                      </button>
+                      </AttentionItem>
                     );
                   })}
-                  {interestRiskCards.map(({ card, risk }) => (
-                    <button key={`ir-${card.id}`} onClick={() => setSelectedCard(card)}
-                      className="flex items-center justify-between gap-2 text-left rounded-lg bg-card border border-destructive/30 px-3 py-2 hover:border-destructive/60 transition-colors">
+                  {shownInterest.map(({ card, risk }) => (
+                    <AttentionItem key={`ir-${card.id}`} onOpen={() => setSelectedCard(card)} onDismiss={() => dismiss(riskSig(card))} borderClass="border-destructive/30">
                       <div className="flex items-start gap-2 min-w-0">
                         <Percent className="w-4 h-4 mt-0.5 shrink-0 text-destructive" />
                         <div className="min-w-0">
@@ -470,15 +492,14 @@ const Dashboard = () => {
                         </div>
                       </div>
                       <span className="font-semibold whitespace-nowrap text-destructive">{fmtMoney(risk!.remaining)}</span>
-                    </button>
+                    </AttentionItem>
                   ))}
-                  {adSpendWarnings.map(({ card, ad }) => {
+                  {shownAdSpend.map(({ card, ad }) => {
                     const over = ad.fraction >= 1;
                     const tone = ad.fraction >= 0.9 ? 'text-destructive' : 'text-warning';
                     return (
-                      <button key={`ad-${card.id}`} onClick={() => setSelectedCard(card)}
-                        className={cn('flex items-center justify-between gap-2 text-left rounded-lg bg-card border px-3 py-2 transition-colors',
-                          ad.fraction >= 0.9 ? 'border-destructive/30 hover:border-destructive/60' : 'border-border hover:border-warning/50')}>
+                      <AttentionItem key={`ad-${card.id}`} onOpen={() => setSelectedCard(card)} onDismiss={() => dismiss(adSig(card, ad))}
+                        borderClass={ad.fraction >= 0.9 ? 'border-destructive/30' : undefined}>
                         <div className="flex items-start gap-2 min-w-0">
                           <Megaphone className={cn('w-4 h-4 mt-0.5 shrink-0', tone)} />
                           <div className="min-w-0">
@@ -494,18 +515,20 @@ const Dashboard = () => {
                         <span className={cn('font-semibold whitespace-nowrap', tone)}>
                           {over ? `+${fmtMoney(ad.spent - ad.limit)}` : `${fmtMoney(ad.limit - ad.spent)} left`}
                         </span>
-                      </button>
+                      </AttentionItem>
                     );
                   })}
-                  {openAlerts.map((a) => (
-                    <div key={a.id} className="flex items-start gap-2 rounded-lg bg-card border border-border px-3 py-2">
-                      <AlertTriangle className={cn('w-4 h-4 mt-0.5 shrink-0',
-                        (a.severity ?? '').toLowerCase() === 'high' ? 'text-destructive' : 'text-warning')} />
-                      <div className="min-w-0">
-                        <p className="font-medium truncate">{a.title ?? a.alertType ?? 'Alert'}</p>
-                        {a.message && <p className="text-xs text-muted-foreground line-clamp-2">{a.message}</p>}
+                  {shownAlerts.map((a) => (
+                    <AttentionItem key={a.id} onDismiss={() => dismiss(alertSig(a))}>
+                      <div className="flex items-start gap-2 min-w-0">
+                        <AlertTriangle className={cn('w-4 h-4 mt-0.5 shrink-0',
+                          (a.severity ?? '').toLowerCase() === 'high' ? 'text-destructive' : 'text-warning')} />
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{a.title ?? a.alertType ?? 'Alert'}</p>
+                          {a.message && <p className="text-xs text-muted-foreground line-clamp-2">{a.message}</p>}
+                        </div>
                       </div>
-                    </div>
+                    </AttentionItem>
                   ))}
                 </div>
               </div>
@@ -895,6 +918,26 @@ function ActivityBreakdownDialog({ detail, sourceOf, onClose }: {
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function AttentionItem({ onOpen, onDismiss, borderClass, children }: {
+  onOpen?: () => void; onDismiss: () => void; borderClass?: string; children: React.ReactNode;
+}) {
+  return (
+    <div className={cn('flex items-center gap-1 rounded-lg bg-card border px-3 py-2', borderClass ?? 'border-border')}>
+      {onOpen ? (
+        <button onClick={onOpen} className="flex items-center justify-between gap-2 text-left flex-1 min-w-0 hover:opacity-80 transition-opacity">
+          {children}
+        </button>
+      ) : (
+        <div className="flex items-center justify-between gap-2 flex-1 min-w-0">{children}</div>
+      )}
+      <button onClick={onDismiss} title="Dismiss — reappears when action is next needed"
+        className="shrink-0 text-muted-foreground hover:text-foreground rounded p-1 hover:bg-muted">
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </div>
   );
 }
 
