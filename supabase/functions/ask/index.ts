@@ -85,8 +85,19 @@ serve(async (req) => {
       }
 
       const limit = Math.min(Math.max(Number(args.limit) || 50, 1), 500);
+      // Aggregate totals over ALL matched rows (not just the sample) so the model
+      // can state accurate totals even when rows are truncated to `limit`.
+      const totalsByType: Record<string, number> = {};
+      for (const t of rows) {
+        const k = t.transaction_type || "unknown";
+        totalsByType[k] = Math.round(((totalsByType[k] || 0) + Number(t.amount || 0)) * 100) / 100;
+      }
+      const spend = Math.round((((totalsByType.expense || 0) + (totalsByType.fee || 0)) - (totalsByType.refund || 0)) * 100) / 100;
       return {
         matched: rows.length,
+        totalsByType,
+        netSpend: spend, // expense + fee − refund, over all matched rows
+        note: rows.length > limit ? `Showing ${limit} of ${rows.length} rows; totalsByType/netSpend cover ALL ${rows.length} matched rows.` : undefined,
         rows: rows.slice(0, limit).map((t: any) => ({
           date: t.transaction_date, description: t.merchant_name || t.description,
           amount: t.amount, type: t.transaction_type, category: t.category, source: sourceName(t),
@@ -118,7 +129,8 @@ serve(async (req) => {
       "Credit-card 'refund'/'income' rows are money back (not revenue); 'payment' rows are card payments. Never invent numbers — base every figure on tool results. " +
       "The accounts and cards are provided in the first message; use the exact last_four shown there (it may be 5 digits) for card_last_four. " +
       "IMPORTANT — for advertising/ad spend, use the CATEGORY filter, not merchant names: pass category='advertising' (ad refunds are category='advertising_refund'). Merchant names for ads are unreliable (they show as 'Amazon', 'Sponsored Products', 'Marketing Services', 'Google Ads', 'TikTok Ads', etc.), so filtering by category is the accurate way to total ad spend. Sum expense/fee rows and subtract advertising_refund rows. " +
-      "The 'category' field generally classifies transactions (advertising, shopping, services, financial, income, transfers), so prefer category filters for category questions. description_contains accepts comma-separated terms (OR-matched) for merchant-name searches.";
+      "The 'category' field generally classifies transactions (advertising, shopping, services, financial, income, transfers), so prefer category filters for category questions. description_contains accepts comma-separated terms (OR-matched) for merchant-name searches. " +
+      "For TOTALS, always use the tool's returned 'totalsByType' and 'netSpend' fields (they cover ALL matched rows) — never sum the sampled 'rows' yourself, since rows are truncated to the limit.";
 
     const model = Deno.env.get("ASK_MODEL") ?? "claude-haiku-4-5";
     const messages: any[] = [{
