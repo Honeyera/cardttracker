@@ -47,6 +47,7 @@ serve(async (req) => {
       if (args.start_date) q = q.gte("transaction_date", args.start_date);
       if (args.end_date) q = q.lte("transaction_date", args.end_date);
       if (args.transaction_type) q = q.eq("transaction_type", args.transaction_type);
+      if (args.category) q = q.ilike("category", `%${String(args.category).replace(/[%,]/g, "")}%`);
       if (args.description_contains) {
         // Accept comma-separated terms — matched as OR across description + merchant.
         const terms = String(args.description_contains).split(",").map((x) => x.trim().replace(/[%,]/g, "")).filter(Boolean);
@@ -103,6 +104,7 @@ serve(async (req) => {
           end_date: { type: "string", description: "YYYY-MM-DD inclusive upper bound" },
           description_contains: { type: "string", description: "case-insensitive merchant/description substring, e.g. 'amazon'" },
           transaction_type: { type: "string", enum: ["expense", "income", "payment", "transfer", "refund", "fee"] },
+          category: { type: "string", description: "filter by category substring, e.g. 'advertising', 'shopping', 'services'" },
           card_last_four: { type: "string", description: "filter to a card by its last 4-5 digits" },
           group_by: { type: "string", enum: ["none", "month", "merchant", "category", "card"], description: "aggregate the matches (returns count + total per group) instead of raw rows" },
           limit: { type: "integer", description: "max rows when group_by is none (default 50, max 500)" },
@@ -115,8 +117,8 @@ serve(async (req) => {
       "Make multiple tool calls if needed (e.g. per card, or to aggregate by month). All amounts are USD. Be concise and specific; include dates, amounts, and which card/account. " +
       "Credit-card 'refund'/'income' rows are money back (not revenue); 'payment' rows are card payments. Never invent numbers — base every figure on tool results. " +
       "The accounts and cards are provided in the first message; use the exact last_four shown there (it may be 5 digits) for card_last_four. " +
-      "IMPORTANT — advertising/ad spend appears under many merchant names in this data, NOT the word 'advertising'. When asked about advertising or ads, pass these as comma-separated terms in description_contains: 'sponsored,marketing svcs,marketing services,advertis,ads,tiktok ads,google ads,meta,facebook,product ads', and sum across all matches. " +
-      "description_contains accepts comma-separated terms (OR-matched), so search several name variants in one call.";
+      "IMPORTANT — for advertising/ad spend, use the CATEGORY filter, not merchant names: pass category='advertising' (ad refunds are category='advertising_refund'). Merchant names for ads are unreliable (they show as 'Amazon', 'Sponsored Products', 'Marketing Services', 'Google Ads', 'TikTok Ads', etc.), so filtering by category is the accurate way to total ad spend. Sum expense/fee rows and subtract advertising_refund rows. " +
+      "The 'category' field generally classifies transactions (advertising, shopping, services, financial, income, transfers), so prefer category filters for category questions. description_contains accepts comma-separated terms (OR-matched) for merchant-name searches.";
 
     const model = Deno.env.get("ASK_MODEL") ?? "claude-haiku-4-5";
     const messages: any[] = [{
