@@ -6,10 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Sparkles, Loader2, CornerDownLeft } from 'lucide-react';
 
 const EXAMPLES = [
-  'What are the latest 3 transactions on the Amex cards?',
+  'Show me a charge that recurs every month',
+  'How much did I spend on Amazon ads this year?',
   'Which card is due next and how much?',
-  'How much did I spend on ads this month?',
-  'Which card has the most points?',
+  'What was my total income last month?',
 ];
 
 export function AskBox({ accounts, cards, transactions }: {
@@ -20,67 +20,23 @@ export function AskBox({ accounts, cards, transactions }: {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Compact context for the model: accounts, cards, and recent transactions
-  // (with the source card/account name resolved).
-  const context = useMemo(() => {
-    const cardName = (id: string | null) => cards.find((c) => c.id === id)?.name ?? null;
-    const acctName = (id: string | null) => accounts.find((a) => a.id === id)?.name ?? null;
-
-    // Recurring-charge summary computed over ALL history, so pattern questions
-    // ("what recurs monthly?") work without shipping every raw row to the model.
-    const norm = (s: string) => s.toLowerCase()
-      .replace(/\d+/g, ' ').replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim()
-      .split(' ').slice(0, 4).join(' ');
-    const groups = new Map<string, { name: string; months: Set<string>; count: number; amounts: number[]; sources: Set<string>; last: string }>();
-    for (const t of transactions) {
-      if (t.type === 'payment' || t.type === 'transfer') continue;
-      const label = t.merchantName || t.description || '';
-      const key = norm(label);
-      if (!key) continue;
-      let g = groups.get(key);
-      if (!g) { g = { name: label, months: new Set(), count: 0, amounts: [], sources: new Set(), last: t.date }; groups.set(key, g); }
-      g.months.add(t.date.slice(0, 7));
-      g.count++; g.amounts.push(t.amount);
-      const src = cardName(t.creditCardId) ?? acctName(t.accountId);
-      if (src) g.sources.add(src);
-      if (t.date > g.last) g.last = t.date;
-    }
-    const recurringCharges = [...groups.values()]
-      .filter((g) => g.months.size >= 3)
-      .sort((a, b) => b.months.size - a.months.size)
-      .slice(0, 60)
-      .map((g) => ({
-        name: g.name,
-        occurrences: g.count,
-        distinctMonths: g.months.size,
-        typicalAmount: Math.round((g.amounts.reduce((s, a) => s + a, 0) / g.amounts.length) * 100) / 100,
-        minAmount: Math.min(...g.amounts), maxAmount: Math.max(...g.amounts),
-        lastSeen: g.last, sources: [...g.sources],
-      }));
-
-    return {
-      today: new Date().toISOString().slice(0, 10),
-      _note: 'recentTransactions is only the latest 250 rows. recurringCharges is aggregated over the FULL history (all years) — use it for recurring/pattern/frequency questions. transactionCount is the total on file.',
-      transactionCount: transactions.length,
-      recurringCharges,
-      accounts: accounts.map((a) => ({
-        name: a.name, institution: a.institution, type: a.accountType, lastFour: a.lastFour,
-        currentBalance: a.currentBalance, availableBalance: a.availableBalance, company: a.company,
-      })),
-      cards: cards.map((c) => ({
-        name: c.name, lastFour: c.lastFour, company: c.companyName, owner: c.ownerName,
-        currentBalance: c.currentBalance, statementBalance: c.lastStatementBalance,
-        minimumPayment: c.minimumPayment, creditLimit: c.creditLimit, apr: c.purchaseApr,
-        statementDate: c.lastStatementDate, dueDate: c.nextPaymentDueDate,
-        lastPaymentAmount: c.lastPaymentAmount, lastPaymentDate: c.lastPaymentDate,
-      })),
-      recentTransactions: transactions.slice(0, 250).map((t) => ({
-        date: t.date, description: t.merchantName || t.description, amount: t.amount,
-        type: t.type, category: t.category,
-        source: cardName(t.creditCardId) ?? acctName(t.accountId) ?? null,
-      })),
-    };
-  }, [accounts, cards, transactions]);
+  // Small context: accounts + cards only. The edge function queries the FULL
+  // transaction history itself (via a tool), so we don't ship transactions here.
+  const context = useMemo(() => ({
+    today: new Date().toISOString().slice(0, 10),
+    transactionCount: transactions.length,
+    accounts: accounts.map((a) => ({
+      name: a.name, institution: a.institution, type: a.accountType, lastFour: a.lastFour,
+      currentBalance: a.currentBalance, availableBalance: a.availableBalance, company: a.company,
+    })),
+    cards: cards.map((c) => ({
+      name: c.name, lastFour: c.lastFour, company: c.companyName, owner: c.ownerName,
+      currentBalance: c.currentBalance, statementBalance: c.lastStatementBalance,
+      minimumPayment: c.minimumPayment, creditLimit: c.creditLimit, apr: c.purchaseApr,
+      statementDate: c.lastStatementDate, dueDate: c.nextPaymentDueDate,
+      lastPaymentAmount: c.lastPaymentAmount, lastPaymentDate: c.lastPaymentDate,
+    })),
+  }), [accounts, cards, transactions.length]);
 
   const ask = async (q: string) => {
     const query = q.trim();
