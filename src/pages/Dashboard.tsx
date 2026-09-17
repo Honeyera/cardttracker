@@ -333,9 +333,19 @@ const Dashboard = () => {
       .sort((a, b) => urgencyRank(a, paidFor(a.id)) - urgencyRank(b, paidFor(b.id))),
     [visibleCards],
   );
+  // Synced alerts, but suppress stale ones contradicted by the card's current
+  // state (payment-due alerts for cards now paid; over-limit alerts no longer over).
   const openAlerts = useMemo(
-    () => alerts.filter((a) => (a.status ?? 'open').toLowerCase() !== 'resolved'),
-    [alerts],
+    () => alerts.filter((a) => {
+      if ((a.status ?? 'open').toLowerCase() === 'resolved') return false;
+      const card = a.creditCardId ? cards.find((c) => c.id === a.creditCardId) : null;
+      if (card) {
+        if (a.alertType === 'payment_due' && isSettled(card, paidFor(card.id))) return false;
+        if (a.alertType === 'high_balance' && card.creditLimit > 0 && card.currentBalance <= card.creditLimit + 0.005) return false;
+      }
+      return true;
+    }),
+    [alerts, cards, paidTowardStatementByCard],
   );
 
   // Total paid toward each card's current statement (sum of payments on/after the
