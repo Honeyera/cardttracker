@@ -235,7 +235,7 @@ const Dashboard = () => {
   }, [transactions, cards, accounts, company]);
 
   // ── Top-line numbers ────────────────────────────────────────────────
-  const availableCash = depository.reduce((s, a) => s + a.currentBalance, 0);
+  const availableCash = depository.reduce((s, a) => s + a.availableBalance, 0);
   const totalCardDebt = visibleCards.reduce((s, c) => s + c.currentBalance, 0);
   const statementDue = visibleCards.reduce((s, c) => s + c.currentBalance, 0);
   const creditAvailable = visibleCards.reduce(
@@ -766,10 +766,10 @@ function AccountTile({ account, history, onClick }: {
         {account.lastFour ? ` •••• ${account.lastFour}` : ''}
         {' · '}{account.accountType}
       </p>
-      <p className="text-2xl font-bold text-card-foreground truncate">{fmtMoney(account.currentBalance, { cents: true })}</p>
+      <p className="text-2xl font-bold text-card-foreground truncate">{fmtMoney(account.availableBalance, { cents: true })}</p>
       <div className="flex items-end justify-between gap-2 mt-1">
         <p className="text-xs text-muted-foreground truncate">
-          {fmtMoney(account.availableBalance)} available
+          available · {fmtMoney(account.currentBalance)} posted
         </p>
         {history.length > 1 && <Sparkline data={history} />}
       </div>
