@@ -338,9 +338,11 @@ const Dashboard = () => {
   const openAlerts = useMemo(
     () => alerts.filter((a) => {
       if ((a.status ?? 'open').toLowerCase() === 'resolved') return false;
+      // Due-payment alerts are computed live from card data (see attentionCards),
+      // so ignore the synced payment_due rows — they go stale.
+      if (a.alertType === 'payment_due') return false;
       const card = a.creditCardId ? cards.find((c) => c.id === a.creditCardId) : null;
       if (card) {
-        if (a.alertType === 'payment_due' && isSettled(card, paidFor(card.id))) return false;
         if (a.alertType === 'high_balance' && card.creditLimit > 0 && card.currentBalance <= card.creditLimit + 0.005) return false;
       }
       return true;
