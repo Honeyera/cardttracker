@@ -989,7 +989,7 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
   // One status strip per tile: do I need to act, how much, by when.
   let strip: { tone: Tone; icon: React.ComponentType<{ className?: string }>; text: string };
   if (card.isOverdue) {
-    strip = { tone: 'danger', icon: AlertTriangle, text: `Overdue — pay ${fmtMoney(payAmount)} now` };
+    strip = { tone: 'danger', icon: AlertTriangle, text: `Overdue — pay ${fmtMoney(payAmount, { cents: true })} now` };
   } else if (settled) {
     strip = { tone: 'success', icon: CheckCircle2, text: 'Nothing due' };
   } else if (due) {
@@ -997,7 +997,7 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
     strip = {
       tone: due.days <= 3 ? 'danger' : due.days <= 7 ? 'warning' : 'muted',
       icon: due.days <= 3 ? AlertTriangle : CalendarClock,
-      text: `Pay ${fmtMoney(payAmount)} by ${format(due.date, 'MMM d')} · ${when}`,
+      text: `Pay ${fmtMoney(payAmount, { cents: true })} by ${format(due.date, 'MMM d')} · ${when}`,
     };
   } else {
     strip = { tone: 'muted', icon: CalendarClock, text: 'No due date on file' };
