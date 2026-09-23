@@ -825,7 +825,7 @@ function AccountDetailDialog({ account, transactions, history, onClose }: {
                 </span>
               </DialogTitle>
             </DialogHeader>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4 text-sm">
               <Field label="Current Balance">{fmtMoney(account.currentBalance, { cents: true })}</Field>
               <Field label="Available Balance">{fmtMoney(account.availableBalance, { cents: true })}</Field>
               <Field label="Type">{account.accountType}{account.accountSubtype ? ` · ${account.accountSubtype}` : ''}</Field>
@@ -1235,7 +1235,7 @@ function CardDetailDialog({ card, adSpend, transactions, onClose }: {
             <DialogHeader>
               <DialogTitle>{card.name} <span className="text-muted-foreground font-normal">•••• {card.lastFour}</span></DialogTitle>
             </DialogHeader>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4 text-sm">
               <Field label="Current Balance (owed now)">{fmtMoney(card.currentBalance, { cents: true })}</Field>
               <Field label="Last Statement">
                 {card.lastStatementBalance != null ? fmtMoney(card.lastStatementBalance, { cents: true }) : '—'}
