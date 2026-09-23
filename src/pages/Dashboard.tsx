@@ -1305,12 +1305,31 @@ function paymentProcessor(t: FinanceTransaction): string | null {
   return null;
 }
 
+// Given the raw name and the processor, strip the processor noise to reveal the
+// underlying payee, and decide whether to show the "via <proc>" tag.
+function payeeAndVia(rawName: string, proc: string | null): { name: string; showVia: boolean } {
+  if (!proc) return { name: rawName, showVia: false };
+  const p = proc.replace('.', '\\.');
+  const cleaned = rawName
+    .replace(new RegExp(`\\s*\\bvia\\s+${p}\\b\\s*`, 'ig'), ' ')
+    .replace(new RegExp(`^\\s*${p}\\s+payment\\s+to\\s+`, 'i'), '')
+    .replace(new RegExp(`^\\s*${p}\\s*[-*:]\\s*`, 'i'), '')
+    .replace(new RegExp(`${p}\\s*\\*\\s*`, 'ig'), '')
+    .replace(new RegExp(`\\b${p}\\b`, 'ig'), '')
+    .replace(/[*]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  // No real payee left (it was just "Melio"/"Melio Payment") — keep it as a plain
+  // processor payment, no redundant tag.
+  if (!cleaned || /^payment$/i.test(cleaned)) return { name: `${proc} Payment`, showVia: false };
+  return { name: cleaned, showVia: true };
+}
+
 function TxnRow({ txn, source }: { txn: FinanceTransaction; source?: string | null }) {
   const inflow = txn.type === 'income' || txn.type === 'refund';
   const isPayment = txn.type === 'payment';
-  const name = txn.merchantName || txn.description;
   const proc = paymentProcessor(txn);
-  const showVia = proc && !name.toLowerCase().includes(proc.toLowerCase());
+  const { name, showVia } = payeeAndVia(txn.merchantName || txn.description, proc);
   return (
     <div className="flex items-center justify-between gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-muted/60 transition-colors">
       <div className="flex items-center gap-3 min-w-0">
