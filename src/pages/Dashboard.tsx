@@ -922,7 +922,7 @@ function ActivityBreakdownDialog({ detail, sourceOf, onClose }: {
                       <div key={t.id} className="flex items-center justify-between gap-2 text-sm py-0.5 min-w-0">
                         <span className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="text-xs text-muted-foreground w-12 shrink-0">{format(parseISO(t.date), 'MMM d')}</span>
-                          <span className="truncate">{t.merchantName || t.description}</span>
+                          <span className="truncate">{t.description || t.merchantName}</span>
                         </span>
                         <span className="shrink-0 tabular-nums font-medium">{fmtMoney(t.amount, { cents: true })}</span>
                       </div>
@@ -1329,7 +1329,9 @@ function TxnRow({ txn, source }: { txn: FinanceTransaction; source?: string | nu
   const inflow = txn.type === 'income' || txn.type === 'refund';
   const isPayment = txn.type === 'payment';
   const proc = paymentProcessor(txn);
-  const { name, showVia } = payeeAndVia(txn.merchantName || txn.description, proc);
+  // Show the raw description (matches the bank/Amex statement), falling back to
+  // the enriched merchant name only when there is no description.
+  const { name, showVia } = payeeAndVia(txn.description || txn.merchantName, proc);
   return (
     <div className="flex items-center justify-between gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-muted/60 transition-colors">
       <div className="flex items-center gap-3 min-w-0">
