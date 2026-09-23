@@ -1328,10 +1328,11 @@ function payeeAndVia(rawName: string, proc: string | null): { name: string; show
 function TxnRow({ txn, source }: { txn: FinanceTransaction; source?: string | null }) {
   const inflow = txn.type === 'income' || txn.type === 'refund';
   const isPayment = txn.type === 'payment';
+  // Show the raw description exactly as the bank/Amex statement does — no stripping.
+  const name = txn.description || txn.merchantName;
   const proc = paymentProcessor(txn);
-  // Show the raw description (matches the bank/Amex statement), falling back to
-  // the enriched merchant name only when there is no description.
-  const { name, showVia } = payeeAndVia(txn.description || txn.merchantName, proc);
+  // Only add a "via Melio" tag when the name doesn't already show the processor.
+  const showVia = proc != null && !name.toLowerCase().includes(proc.toLowerCase());
   return (
     <div className="flex items-center justify-between gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-muted/60 transition-colors">
       <div className="flex items-center gap-3 min-w-0">
