@@ -1317,7 +1317,7 @@ function TxnRow({ txn, source }: { txn: FinanceTransaction; source?: string | nu
         <div className="min-w-0">
           <p className="font-medium truncate leading-tight">
             {name}
-            {showVia && <span className="ml-1.5 text-[10px] font-medium align-middle rounded bg-primary/10 text-primary px-1.5 py-0.5">via {proc}</span>}
+            {showVia && <span className="ml-2 text-[11px] font-semibold align-middle rounded-full bg-primary text-primary-foreground border border-primary px-2 py-0.5 whitespace-nowrap">via {proc}</span>}
           </p>
           <p className="text-xs text-muted-foreground truncate">
             {format(parseISO(txn.date), 'MMM d, yyyy')}
