@@ -1290,9 +1290,23 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+// Detect a bill-pay processor (Melio/Bill.com/Plastiq) mentioned in the data, so
+// we can show "via Melio" — since on the card statement these show as the
+// processor, not the payee.
+function paymentProcessor(t: FinanceTransaction): string | null {
+  const s = `${t.merchantName ?? ''} ${t.description ?? ''}`.toLowerCase();
+  if (/\bmelio\b/.test(s)) return 'Melio';
+  if (/bill\.?com/.test(s)) return 'Bill.com';
+  if (/plastiq/.test(s)) return 'Plastiq';
+  return null;
+}
+
 function TxnRow({ txn, source }: { txn: FinanceTransaction; source?: string | null }) {
   const inflow = txn.type === 'income' || txn.type === 'refund';
   const isPayment = txn.type === 'payment';
+  const name = txn.merchantName || txn.description;
+  const proc = paymentProcessor(txn);
+  const showVia = proc && !name.toLowerCase().includes(proc.toLowerCase());
   return (
     <div className="flex items-center justify-between gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-muted/60 transition-colors">
       <div className="flex items-center gap-3 min-w-0">
@@ -1301,7 +1315,10 @@ function TxnRow({ txn, source }: { txn: FinanceTransaction; source?: string | nu
           {inflow ? <ArrowDownRight className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
         </div>
         <div className="min-w-0">
-          <p className="font-medium truncate leading-tight">{txn.merchantName || txn.description}</p>
+          <p className="font-medium truncate leading-tight">
+            {name}
+            {showVia && <span className="ml-1.5 text-[10px] font-medium align-middle rounded bg-primary/10 text-primary px-1.5 py-0.5">via {proc}</span>}
+          </p>
           <p className="text-xs text-muted-foreground truncate">
             {format(parseISO(txn.date), 'MMM d, yyyy')}
             {source ? ` · ${source}` : ''}
