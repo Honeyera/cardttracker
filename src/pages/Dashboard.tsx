@@ -814,10 +814,10 @@ function AccountDetailDialog({ account, transactions, history, onClose }: {
   const chartData = history.map((s) => ({ ...s, label: format(parseISO(s.date), 'MMM d') }));
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-4xl w-[95vw] max-h-[85vh] overflow-y-auto overflow-x-hidden">
+      <DialogContent className="max-w-4xl w-[95vw] max-h-[85vh] overflow-hidden flex flex-col">
         {account && (
           <>
-            <DialogHeader>
+            <DialogHeader className="shrink-0">
               <DialogTitle>
                 {account.name}{' '}
                 <span className="text-muted-foreground font-normal">
@@ -825,13 +825,14 @@ function AccountDetailDialog({ account, transactions, history, onClose }: {
                 </span>
               </DialogTitle>
             </DialogHeader>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4 text-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4 text-sm shrink-0">
               <Field label="Current Balance">{fmtMoney(account.currentBalance, { cents: true })}</Field>
               <Field label="Available Balance">{fmtMoney(account.availableBalance, { cents: true })}</Field>
               <Field label="Type">{account.accountType}{account.accountSubtype ? ` · ${account.accountSubtype}` : ''}</Field>
               <Field label="Last Updated">{account.updatedAt ? fmtDate(account.updatedAt) : '—'}</Field>
             </div>
 
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -mx-1 px-1">
             {chartData.length > 1 && (
               <div className="mt-2">
                 <p className="text-sm font-semibold mb-2">Balance History</p>
@@ -857,6 +858,7 @@ function AccountDetailDialog({ account, transactions, history, onClose }: {
             )}
 
             <TransactionsPanel transactions={transactions} resetKey={account.id} />
+            </div>
           </>
         )}
       </DialogContent>
@@ -1229,13 +1231,13 @@ function CardDetailDialog({ card, adSpend, transactions, onClose }: {
   const due = card ? resolveDue(card) : null;
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-4xl w-[95vw] max-h-[85vh] overflow-y-auto overflow-x-hidden">
+      <DialogContent className="max-w-4xl w-[95vw] max-h-[85vh] overflow-hidden flex flex-col">
         {card && (
           <>
-            <DialogHeader>
+            <DialogHeader className="shrink-0">
               <DialogTitle>{card.name} <span className="text-muted-foreground font-normal">•••• {card.lastFour}</span></DialogTitle>
             </DialogHeader>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4 text-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4 text-sm shrink-0">
               <Field label="Current Balance (owed now)">{fmtMoney(card.currentBalance, { cents: true })}</Field>
               <Field label="Last Statement">
                 {card.lastStatementBalance != null ? fmtMoney(card.lastStatementBalance, { cents: true }) : '—'}
@@ -1263,7 +1265,9 @@ function CardDetailDialog({ card, adSpend, transactions, onClose }: {
                 </>
               )}
             </div>
-            <TransactionsPanel transactions={transactions} resetKey={card.id} showAdsFilter={adSpend != null} />
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -mx-1 px-1">
+              <TransactionsPanel transactions={transactions} resetKey={card.id} showAdsFilter={adSpend != null} />
+            </div>
           </>
         )}
       </DialogContent>
