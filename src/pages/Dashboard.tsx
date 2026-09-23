@@ -1214,8 +1214,8 @@ function TransactionsPanel({ transactions, resetKey, showAdsFilter }: {
       ) : filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground py-4 text-center">No transactions in this date range.</p>
       ) : (
-        <div className="space-y-1">
-          {filtered.map((t) => <TxnRow key={t.id} txn={t}  />)}
+        <div className="divide-y divide-border/60">
+          {filtered.map((t) => <TxnRow key={t.id} txn={t} />)}
         </div>
       )}
     </div>
@@ -1294,23 +1294,23 @@ function TxnRow({ txn, source }: { txn: FinanceTransaction; source?: string | nu
   const inflow = txn.type === 'income' || txn.type === 'refund';
   const isPayment = txn.type === 'payment';
   return (
-    <div className="flex items-center justify-between py-1.5">
+    <div className="flex items-center justify-between gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-muted/60 transition-colors">
       <div className="flex items-center gap-3 min-w-0">
         <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
           inflow ? 'bg-success/10 text-success' : isPayment ? 'bg-muted text-muted-foreground' : 'bg-warning/10 text-warning')}>
           {inflow ? <ArrowDownRight className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
         </div>
         <div className="min-w-0">
-          <p className="font-medium truncate">{txn.merchantName || txn.description}</p>
-          {source && <p className="text-xs font-medium text-foreground/70 truncate">{source}</p>}
+          <p className="font-medium truncate leading-tight">{txn.merchantName || txn.description}</p>
           <p className="text-xs text-muted-foreground truncate">
-            {format(parseISO(txn.date), 'MMM d')}
+            {format(parseISO(txn.date), 'MMM d, yyyy')}
+            {source ? ` · ${source}` : ''}
             {txn.category ? ` · ${txn.category}` : ''}
             {txn.isPending ? ' · pending' : ''}
           </p>
         </div>
       </div>
-      <span className={cn('font-semibold shrink-0 ml-2', inflow ? 'text-success' : 'text-foreground')}>
+      <span className={cn('font-semibold shrink-0 tabular-nums text-right whitespace-nowrap', inflow ? 'text-success' : 'text-foreground')}>
         {inflow ? '+' : isPayment ? '' : '−'}{fmtMoney(txn.amount, { cents: true })}
       </span>
     </div>
