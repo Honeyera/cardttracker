@@ -814,7 +814,7 @@ function AccountDetailDialog({ account, transactions, history, onClose }: {
   const chartData = history.map((s) => ({ ...s, label: format(parseISO(s.date), 'MMM d') }));
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-2xl w-[95vw] max-h-[85vh] overflow-y-auto overflow-x-hidden">
+      <DialogContent className="max-w-4xl w-[95vw] max-h-[85vh] overflow-y-auto overflow-x-hidden">
         {account && (
           <>
             <DialogHeader>
@@ -1229,7 +1229,7 @@ function CardDetailDialog({ card, adSpend, transactions, onClose }: {
   const due = card ? resolveDue(card) : null;
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-2xl w-[95vw] max-h-[85vh] overflow-y-auto overflow-x-hidden">
+      <DialogContent className="max-w-4xl w-[95vw] max-h-[85vh] overflow-y-auto overflow-x-hidden">
         {card && (
           <>
             <DialogHeader>
