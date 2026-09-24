@@ -51,4 +51,4 @@ begin
 end;
 $$;
 
-grant execute on function public.finance_prune_pending(text, jsonb) to authenticated, service_role, anon;
+grant execute on function public.finance_prune_pending(text, jsonb) to authenticated, service_role;

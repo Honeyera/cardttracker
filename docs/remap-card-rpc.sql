@@ -48,4 +48,4 @@ begin
 end;
 $$;
 
-grant execute on function public.remap_card(text, text) to authenticated, service_role, anon;
+grant execute on function public.remap_card(text, text) to authenticated, service_role;

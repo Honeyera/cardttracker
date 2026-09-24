@@ -95,4 +95,4 @@ begin
 end;
 $$;
 
-grant execute on function public.finance_upsert(text, jsonb, text) to authenticated, service_role, anon;
+grant execute on function public.finance_upsert(text, jsonb, text) to authenticated, service_role;
