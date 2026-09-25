@@ -989,11 +989,20 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
     : (card.currentBalance || card.minimumPayment || card.totalBalance);
 
   // One status strip per tile: do I need to act, how much, by when.
-  let strip: { tone: Tone; icon: React.ComponentType<{ className?: string }>; text: string };
+  let strip: { tone: Tone; icon: React.ComponentType<{ className?: string }>; text: string; subtext?: string };
+  const stmtBal = card.lastStatementBalance ?? 0;
+  const notRequired = /not required|no payment|don'?t have a payment|paid in full|nothing due/i.test(card.paymentStatus ?? '');
   if (card.isOverdue) {
     strip = { tone: 'danger', icon: AlertTriangle, text: `Overdue — pay ${fmtMoney(payAmount, { cents: true })} now` };
   } else if (settled) {
-    strip = { tone: 'success', icon: CheckCircle2, text: 'Nothing due' };
+    // Nothing due right now, but still surface the upcoming statement + due date.
+    strip = (due && stmtBal > 0.005)
+      ? {
+          tone: 'success', icon: CheckCircle2,
+          text: `Statement ${fmtMoney(stmtBal, { cents: true })} · due ${format(due.date, 'MMM d')}`,
+          subtext: notRequired ? 'Payment not required at this time' : 'Statement is covered',
+        }
+      : { tone: 'success', icon: CheckCircle2, text: notRequired ? 'Payment not required at this time' : 'Nothing due' };
   } else if (due) {
     const when = due.days <= 0 ? 'due today' : due.days === 1 ? 'in 1 day' : `in ${due.days} days`;
     strip = {
@@ -1043,6 +1052,7 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
           <strip.icon className="w-4 h-4 shrink-0" />
           <span className="truncate">{strip.text}</span>
         </span>
+        {strip.subtext && <span className="text-xs font-normal opacity-90 pl-[22px] truncate">{strip.subtext}</span>}
         {risk && (
           <span className="flex items-center gap-1.5 text-xs text-destructive min-w-0">
             <Percent className="w-3.5 h-3.5 shrink-0" />
