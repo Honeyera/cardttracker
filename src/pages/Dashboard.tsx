@@ -113,6 +113,19 @@ function interestRisk(card: FinanceCard, paidTowardStatement: number): { paid: n
 }
 
 // Lower rank = more urgent (sorts first). Overdue < due-soon (by days) < settled.
+// Safety net: a statement that is unpaid AND due within `days` is genuinely due,
+// even if the issuer's payment_status still says "not required" (can be stale /
+// autopay). Returns the resolved due info when it applies, else null.
+function unpaidStatementDueWithin(card: FinanceCard, paidTowardStatement: number, days: number): { date: Date; days: number } | null {
+  if (card.isOverdue) return null;
+  const stmt = card.lastStatementBalance ?? 0;
+  if (stmt <= 0.005) return null;
+  if (paidTowardStatement + 0.005 >= stmt) return null; // statement already covered
+  const due = resolveDue(card);
+  if (!due || due.days < 0 || due.days > days) return null;
+  return due;
+}
+
 function urgencyRank(card: FinanceCard, paidTowardStatement = 0): number {
   if (card.isOverdue) return -100000;
   if (isSettled(card, paidTowardStatement)) return 100000;
@@ -329,7 +342,9 @@ const Dashboard = () => {
   // Cards needing attention: overdue, or due within 7 days with a balance owed.
   const attentionCards = useMemo(
     () => visibleCards
-      .filter((c) => c.isOverdue || (() => { const d = resolveDue(c); return d && d.days <= 7 && !isSettled(c, paidFor(c.id)); })())
+      .filter((c) => c.isOverdue
+        || unpaidStatementDueWithin(c, paidFor(c.id), 7) != null
+        || (() => { const d = resolveDue(c); return d && d.days <= 7 && !isSettled(c, paidFor(c.id)); })())
       .sort((a, b) => urgencyRank(a, paidFor(a.id)) - urgencyRank(b, paidFor(b.id))),
     [visibleCards],
   );
@@ -992,8 +1007,18 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
   let strip: { tone: Tone; icon: React.ComponentType<{ className?: string }>; text: string; subtext?: string };
   const stmtBal = card.lastStatementBalance ?? 0;
   const notRequired = /not required|no payment|don'?t have a payment|paid in full|nothing due/i.test(card.paymentStatus ?? '');
+  const forceDue = unpaidStatementDueWithin(card, paidTowardStatement, 7);
   if (card.isOverdue) {
     strip = { tone: 'danger', icon: AlertTriangle, text: `Overdue — pay ${fmtMoney(payAmount, { cents: true })} now` };
+  } else if (forceDue) {
+    // Statement unpaid and due within 7 days — surface it even if the issuer
+    // reports "not required" (stale / autopay).
+    const when = forceDue.days <= 0 ? 'due today' : forceDue.days === 1 ? 'in 1 day' : `in ${forceDue.days} days`;
+    strip = {
+      tone: forceDue.days <= 3 ? 'danger' : 'warning',
+      icon: forceDue.days <= 3 ? AlertTriangle : CalendarClock,
+      text: `Pay ${fmtMoney(payAmount, { cents: true })} by ${format(forceDue.date, 'MMM d')} · ${when}`,
+    };
   } else if (settled) {
     // Nothing due right now, but still surface the upcoming statement + due date.
     strip = (due && stmtBal > 0.005)
