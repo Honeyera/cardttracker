@@ -1000,7 +1000,7 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
       ? {
           tone: 'success', icon: CheckCircle2,
           text: `Statement ${fmtMoney(stmtBal, { cents: true })} · due ${format(due.date, 'MMM d')}`,
-          subtext: notRequired ? 'Payment not required at this time' : 'Statement is covered',
+          subtext: 'Payment not required at this time',
         }
       : { tone: 'success', icon: CheckCircle2, text: notRequired ? 'Payment not required at this time' : 'Nothing due' };
   } else if (due) {
