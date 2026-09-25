@@ -343,7 +343,7 @@ const Dashboard = () => {
   const attentionCards = useMemo(
     () => visibleCards
       .filter((c) => c.isOverdue
-        || unpaidStatementDueWithin(c, paidFor(c.id), 7) != null
+        || unpaidStatementDueWithin(c, paidFor(c.id), 15) != null
         || (() => { const d = resolveDue(c); return d && d.days <= 7 && !isSettled(c, paidFor(c.id)); })())
       .sort((a, b) => urgencyRank(a, paidFor(a.id)) - urgencyRank(b, paidFor(b.id))),
     [visibleCards],
@@ -1007,7 +1007,7 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
   let strip: { tone: Tone; icon: React.ComponentType<{ className?: string }>; text: string; subtext?: string };
   const stmtBal = card.lastStatementBalance ?? 0;
   const notRequired = /not required|no payment|don'?t have a payment|paid in full|nothing due/i.test(card.paymentStatus ?? '');
-  const forceDue = unpaidStatementDueWithin(card, paidTowardStatement, 7);
+  const forceDue = unpaidStatementDueWithin(card, paidTowardStatement, 15);
   if (card.isOverdue) {
     strip = { tone: 'danger', icon: AlertTriangle, text: `Overdue — pay ${fmtMoney(payAmount, { cents: true })} now` };
   } else if (forceDue) {
