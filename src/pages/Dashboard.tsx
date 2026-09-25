@@ -128,6 +128,10 @@ function unpaidStatementDueWithin(card: FinanceCard, paidTowardStatement: number
 
 function urgencyRank(card: FinanceCard, paidTowardStatement = 0): number {
   if (card.isOverdue) return -100000;
+  // An unpaid statement due within 15 days is genuinely due — rank by days even
+  // if the issuer says "not required" (so it doesn't get sorted as settled).
+  const forceDue = unpaidStatementDueWithin(card, paidTowardStatement, 15);
+  if (forceDue) return forceDue.days;
   if (isSettled(card, paidTowardStatement)) return 100000;
   const due = resolveDue(card);
   return due ? due.days : 99999; // no due date → near the end, but before settled
