@@ -1024,14 +1024,24 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
       text: `Pay ${fmtMoney(payAmount, { cents: true })} by ${format(forceDue.date, 'MMM d')} · ${when}`,
     };
   } else if (settled) {
-    // Nothing due right now, but still surface the upcoming statement + due date.
-    strip = (due && stmtBal > 0.005)
-      ? {
-          tone: 'success', icon: CheckCircle2,
-          text: `Statement ${fmtMoney(stmtBal, { cents: true })} · due ${format(due.date, 'MMM d')}`,
-          subtext: 'Payment not required at this time',
-        }
-      : { tone: 'success', icon: CheckCircle2, text: notRequired ? 'Payment not required at this time' : 'Nothing due' };
+    const statementPaid = stmtBal > 0.005 && (paidTowardStatement + 0.005) >= stmtBal;
+    if (statementPaid) {
+      // Statement was paid — show it as paid, not as an amount due.
+      strip = {
+        tone: 'success', icon: CheckCircle2,
+        text: `Statement ${fmtMoney(stmtBal, { cents: true })} · paid`,
+        subtext: 'Payment not required at this time',
+      };
+    } else if (due && stmtBal > 0.005) {
+      // Not covered yet, but the issuer says not required — surface the upcoming due date.
+      strip = {
+        tone: 'success', icon: CheckCircle2,
+        text: `Statement ${fmtMoney(stmtBal, { cents: true })} · due ${format(due.date, 'MMM d')}`,
+        subtext: 'Payment not required at this time',
+      };
+    } else {
+      strip = { tone: 'success', icon: CheckCircle2, text: notRequired ? 'Payment not required at this time' : 'Nothing due' };
+    }
   } else if (due) {
     const when = due.days <= 0 ? 'due today' : due.days === 1 ? 'in 1 day' : `in ${due.days} days`;
     strip = {
