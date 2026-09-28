@@ -533,7 +533,7 @@ const Dashboard = () => {
                           <Megaphone className={cn('w-4 h-4 mt-0.5 shrink-0', tone)} />
                           <div className="min-w-0">
                             <p className="font-medium truncate">
-                              {card.name} <span className="text-muted-foreground font-normal">ad spend {Math.round(ad.fraction * 100)}% of cap</span>
+                              {card.name} <span className="text-muted-foreground font-normal">••{card.lastFour}{card.companyName ? ` · ${card.companyName}` : ''} · ad spend {Math.round(ad.fraction * 100)}% of cap</span>
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {fmtMoney(ad.spent)} of {fmtMoney(ad.limit)}
