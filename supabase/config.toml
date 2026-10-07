@@ -30,3 +30,7 @@ verify_jwt = false
 # AI "Ask" Q&A over the user's finance data. Verifies the caller's JWT in-code.
 [functions.ask]
 verify_jwt = false
+
+# Stale-sync email alert. Called by pg_cron; authenticates via CRON_SECRET header.
+[functions.sync-watchdog]
+verify_jwt = false
