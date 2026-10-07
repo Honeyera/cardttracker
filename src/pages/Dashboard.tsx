@@ -417,6 +417,11 @@ const Dashboard = () => {
   }, [forecast]);
   const endPoint = forecast.length ? forecast[forecast.length - 1] : null;
 
+  // Stale-sync detection: warn if data hasn't synced in 2+ days.
+  const syncHoursAgo = lastSyncedAt ? (Date.now() - new Date(lastSyncedAt).getTime()) / 3_600_000 : null;
+  const syncStale = !loading && (syncHoursAgo == null || syncHoursAgo >= 48);
+  const syncDaysAgo = syncHoursAgo != null ? Math.floor(syncHoursAgo / 24) : null;
+
   if (authLoading || (!user && !authLoading)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -458,8 +463,9 @@ const Dashboard = () => {
           </div>
           <div className="flex items-center gap-3">
             {lastSyncedAt && (
-              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                <RefreshCw className="w-3 h-3" /> Synced {fmtDateTime(lastSyncedAt)}
+              <span className={cn('text-xs flex items-center gap-1', syncStale ? 'text-destructive font-medium' : 'text-muted-foreground')}>
+                {syncStale ? <AlertTriangle className="w-3 h-3" /> : <RefreshCw className="w-3 h-3" />}
+                Synced {fmtDateTime(lastSyncedAt)}
               </span>
             )}
             {companies.length > 0 && (
@@ -483,6 +489,19 @@ const Dashboard = () => {
           </div>
         ) : (
           <>
+            {/* Stale sync warning (full-width, above the other alerts) */}
+            {syncStale && (
+              <div className="rounded-2xl border border-destructive/40 bg-destructive/5 p-4 flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-foreground">Data hasn't synced in {syncDaysAgo != null ? `${syncDaysAgo} day${syncDaysAgo === 1 ? '' : 's'}` : 'a while'}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Last sync was {lastSyncedAt ? fmtDateTime(lastSyncedAt) : 'unknown'}. Balances and transactions may be out of date — run the sync in ChatGPT.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Needs Attention */}
             {(shownAttention.length > 0 || shownAlerts.length > 0 || shownInterest.length > 0 || shownAdSpend.length > 0) && (
               <div className="rounded-2xl border border-warning/40 bg-warning/5 p-5">
