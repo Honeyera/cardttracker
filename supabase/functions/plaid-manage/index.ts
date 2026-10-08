@@ -27,7 +27,7 @@ serve(async (req) => {
     if (action === "list") {
       const { data, error } = await admin
         .from("plaid_items")
-        .select("item_id, institution_name, status, last_synced_at, last_error, access_token")
+        .select("item_id, institution_name, status, last_synced_at, last_error, created_at, access_token")
         .order("institution_name");
       if (error) return json({ error: error.message }, 500);
       // Attach each connection's card/account last-4s so duplicates are visible.
@@ -44,6 +44,7 @@ serve(async (req) => {
           status: it.status,
           last_synced_at: it.last_synced_at,
           last_error: it.last_error,
+          created_at: it.created_at,
           masks,
         });
       }

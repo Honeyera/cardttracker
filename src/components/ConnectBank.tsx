@@ -12,6 +12,7 @@ interface PlaidItem {
   status: string;
   last_synced_at: string | null;
   last_error: string | null;
+  created_at?: string | null;
   masks?: string[];
 }
 
@@ -156,6 +157,9 @@ export function ConnectBank({ onSynced }: { onSynced?: () => void }) {
                     <p className="font-medium truncate">{it.institution_name ?? 'Bank'}</p>
                     {it.masks && it.masks.length > 0 && (
                       <p className="text-xs text-muted-foreground truncate">Cards: {it.masks.join(', ')}</p>
+                    )}
+                    {it.created_at && (
+                      <p className="text-xs text-muted-foreground">Added {new Date(it.created_at).toLocaleString()}</p>
                     )}
                     <p className="text-xs text-muted-foreground">
                       {it.status === 'needs_reauth' ? (
