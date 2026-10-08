@@ -27,10 +27,27 @@ serve(async (req) => {
     if (action === "list") {
       const { data, error } = await admin
         .from("plaid_items")
-        .select("item_id, institution_name, status, last_synced_at, last_error")
+        .select("item_id, institution_name, status, last_synced_at, last_error, access_token")
         .order("institution_name");
       if (error) return json({ error: error.message }, 500);
-      return json({ ok: true, items: data ?? [] });
+      // Attach each connection's card/account last-4s so duplicates are visible.
+      const items = [];
+      for (const it of data ?? []) {
+        let masks: string[] = [];
+        try {
+          const a = await plaid("/accounts/get", { access_token: it.access_token });
+          masks = (a.accounts ?? []).map((x: any) => x.mask).filter(Boolean);
+        } catch (_) { /* leave masks empty if unreadable */ }
+        items.push({
+          item_id: it.item_id,
+          institution_name: it.institution_name,
+          status: it.status,
+          last_synced_at: it.last_synced_at,
+          last_error: it.last_error,
+          masks,
+        });
+      }
+      return json({ ok: true, items });
     }
 
     if (action === "remove") {

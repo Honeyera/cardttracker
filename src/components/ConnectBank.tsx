@@ -12,6 +12,7 @@ interface PlaidItem {
   status: string;
   last_synced_at: string | null;
   last_error: string | null;
+  masks?: string[];
 }
 
 // "Connect bank" launches Plaid Link to add an institution; "Sync now" triggers
@@ -153,6 +154,9 @@ export function ConnectBank({ onSynced }: { onSynced?: () => void }) {
                 <div key={it.item_id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
                   <div className="min-w-0">
                     <p className="font-medium truncate">{it.institution_name ?? 'Bank'}</p>
+                    {it.masks && it.masks.length > 0 && (
+                      <p className="text-xs text-muted-foreground truncate">Cards: {it.masks.join(', ')}</p>
+                    )}
                     <p className="text-xs text-muted-foreground">
                       {it.status === 'needs_reauth' ? (
                         <span className="text-destructive inline-flex items-center gap-1">
