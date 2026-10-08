@@ -23,6 +23,7 @@ const AD_PATTERNS: RegExp[] = [
   /tiktok\s*ads?/i,
   /microsoft\s*ad|bing\s*ads?/i,
   /amazon\s*ad(vertising|s)/i,
+  /ams\.amazon|marketing\s*svcs\s*ams|amazon\s*marketing\s*svc/i, // Amazon Ads (AMS)
   /linkedin\s*ads?/i,
   /pinterest\s*ads?/i,
   /snap(chat)?\s*ads?/i,
