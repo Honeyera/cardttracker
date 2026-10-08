@@ -83,6 +83,7 @@ serve(async (req) => {
                 user_id: OWNER_USER_ID,
                 finance_external_account_id: a.account_id,
                 name: a.official_name ?? a.name,
+                owner_name: instName ?? a.official_name ?? a.name ?? "",
                 last_four: a.mask ?? null,
                 credit_limit: bal.limit ?? null,
                 current_balance: bal.current ?? 0,
