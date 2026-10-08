@@ -46,7 +46,53 @@ serve(async (req) => {
     );
     if (error) return json({ error: error.message }, 400);
 
-    return json({ ok: true, item_id, institution: body.institution?.name ?? null });
+    // De-dupe re-links: a new link to the same bank gets NEW Plaid account ids,
+    // so the same physical cards/accounts would appear twice. Find any OTHER
+    // active item whose accounts share a mask (last-4) with this new one and
+    // remove it (and its now-duplicate synced rows), keeping the fresh link.
+    const removedOld: string[] = [];
+    try {
+      const newAccts = await plaid("/accounts/get", { access_token });
+      const newMasks = new Set((newAccts.accounts ?? []).map((a: any) => a.mask).filter(Boolean));
+
+      const { data: others } = await admin
+        .from("plaid_items")
+        .select("item_id, access_token")
+        .neq("item_id", item_id)
+        .eq("status", "active");
+
+      for (const other of others ?? []) {
+        let overlap = false;
+        let oldAccountIds: string[] = [];
+        try {
+          const oa = await plaid("/accounts/get", { access_token: other.access_token });
+          const accts = oa.accounts ?? [];
+          oldAccountIds = accts.map((a: any) => a.account_id);
+          overlap = accts.some((a: any) => a.mask && newMasks.has(a.mask));
+        } catch (_) {
+          continue; // can't read old item; leave it alone
+        }
+        if (!overlap) continue;
+
+        // This old item is superseded by the new link — clean it up.
+        const { data: acctRows } = await admin.from("accounts").select("id").in("external_id", oldAccountIds);
+        const { data: cardRows } = await admin.from("credit_cards").select("id").in("finance_external_account_id", oldAccountIds);
+        const acctIds = (acctRows ?? []).map((r: any) => r.id);
+        const cardIds = (cardRows ?? []).map((r: any) => r.id);
+        if (acctIds.length) {
+          await admin.from("transactions").delete().in("account_id", acctIds);
+          await admin.from("balance_snapshots").delete().in("account_id", acctIds);
+        }
+        if (cardIds.length) await admin.from("transactions").delete().in("credit_card_id", cardIds);
+        await admin.from("accounts").delete().in("external_id", oldAccountIds);
+        await admin.from("credit_cards").delete().in("finance_external_account_id", oldAccountIds);
+        try { await plaid("/item/remove", { access_token: other.access_token }); } catch (_) {}
+        await admin.from("plaid_items").delete().eq("item_id", other.item_id);
+        removedOld.push(other.item_id);
+      }
+    } catch (_) { /* de-dupe is best-effort; never block the link */ }
+
+    return json({ ok: true, item_id, institution: body.institution?.name ?? null, replaced: removedOld });
   } catch (error) {
     console.error("plaid-exchange error:", error);
     return json({ error: String((error as Error)?.message ?? error) }, 500);
