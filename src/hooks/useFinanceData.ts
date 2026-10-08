@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { CardColor } from '@/types/creditCard';
 
 // These tables/columns are populated by the external finance sync (ChatGPT →
 // Plaid → Supabase) and are not in the generated types.ts, so we query through
@@ -112,6 +113,22 @@ const ACCOUNT_COMPANY: Record<string, string> = {
   roAONO3dpahMjvOX836EFKZxk113M3uarB76D: 'TIDYCUBBIES',  // Chase "BUS COMPLETE CHK" ••3609
 };
 
+// Tile color per card. Plaid doesn't give a brand color, so we derive one from
+// the card/issuer name. To pin a specific card to a specific color, add its
+// last_four here (overrides the brand default).
+const CARD_COLOR_OVERRIDES: Record<string, CardColor> = {};
+
+function brandCardColor(name: string | null, company: string | null): CardColor {
+  const s = `${name ?? ''} ${company ?? ''}`.toLowerCase();
+  if (s.includes('amex') || s.includes('american express') || s.includes('gold') || s.includes('platinum')) return 'gold';
+  if (s.includes('sapphire') || s.includes('ultimate rewards') || s.includes('chase')) return 'navy';
+  if (s.includes('bank of america') || s.includes('cash rewards') || s.includes('customized')) return 'ocean';
+  if (s.includes('mercury')) return 'teal';
+  if (s.includes('capital one') || s.includes('venture') || s.includes('quicksilver')) return 'rose';
+  if (s.includes('citi') || s.includes('double cash')) return 'slate';
+  return 'navy';
+}
+
 export function useFinanceData() {
   const { user } = useAuth();
 
@@ -190,7 +207,7 @@ export function useFinanceData() {
         companyName: c.company_name ?? null,
         ownerName: c.owner_name ?? null,
         lastFour: c.last_four ?? null,
-        color: c.network ?? 'navy',
+        color: CARD_COLOR_OVERRIDES[c.last_four] ?? (c.network as CardColor) ?? brandCardColor(c.name, c.company_name),
         creditLimit: num(c.credit_limit),
         currentBalance: num(c.current_balance),
         totalBalance: num(c.total_balance),
