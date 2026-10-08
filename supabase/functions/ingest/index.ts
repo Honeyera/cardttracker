@@ -37,8 +37,23 @@ serve(async (req) => {
 
     if (action === "upsert") {
       if (!body.table || !Array.isArray(body.rows)) return json({ error: "upsert requires 'table' and 'rows'[]" }, 400);
+
+      // (#3) Force ownership: this trusted server supplies the authorized user_id,
+      // overriding whatever the caller sends, so data can only belong to the owner.
+      const owner = Deno.env.get("OWNER_USER_ID") ?? "65b9afb1-c868-4848-a49f-68cd2529ef81";
+      const rows = (body.rows as Record<string, unknown>[]).map((r) => ({ ...r, user_id: owner }));
+
+      // (#2) Validate uniform row shape — finance_upsert derives its column list
+      // from the first row, so mixed-field rows could silently omit columns.
+      if (rows.length > 1) {
+        const shape = (r: Record<string, unknown>) => Object.keys(r).sort().join(",");
+        const first = shape(rows[0]);
+        const bad = rows.findIndex((r) => shape(r) !== first);
+        if (bad >= 0) return json({ error: `Row ${bad} has different fields than row 0 — send uniform batches (same keys in every row).` }, 400);
+      }
+
       const { data, error } = await admin.rpc("finance_upsert", {
-        p_table: body.table, p_rows: body.rows, p_conflict: body.conflict ?? "external_id",
+        p_table: body.table, p_rows: rows, p_conflict: body.conflict ?? "external_id",
       });
       if (error) return json({ error: error.message }, 400);
       return json({ ok: true, result: data });

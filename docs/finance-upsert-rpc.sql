@@ -55,6 +55,22 @@ begin
   if p_conflict !~ '^[a-z_]+(\s*,\s*[a-z_]+)*$' then
     raise exception 'invalid conflict target: %', p_conflict;
   end if;
+  -- Verify the conflict columns actually back a unique index (so ON CONFLICT is
+  -- valid), rather than failing cryptically mid-statement.
+  if not exists (
+    select 1
+    from pg_index i
+    join pg_class t on t.oid = i.indrelid
+    join pg_namespace ns on ns.oid = t.relnamespace
+    where ns.nspname = 'public' and t.relname = p_table and i.indisunique
+      and (
+        select array_agg(a.attname order by a.attname)
+        from unnest(i.indkey) as k(attnum)
+        join pg_attribute a on a.attrelid = i.indrelid and a.attnum = k.attnum
+      ) = (select array_agg(trim(x) order by trim(x)) from unnest(string_to_array(p_conflict, ',')) as x)
+  ) then
+    raise exception 'no unique index on %(%) to support ON CONFLICT', p_table, p_conflict;
+  end if;
   if p_rows is null or jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) = 0 then
     return jsonb_build_object('table', p_table, 'upserted', 0);
   end if;
