@@ -48,11 +48,13 @@ serve(async (req) => {
       return json({ link_token: res.link_token });
     }
 
-    // New connection: request transactions (depository + credit accounts) and
-    // liabilities (credit-card statement/due/APR/minimum-payment details).
+    // New connection: require transactions; request liabilities as OPTIONAL so a
+    // bank that doesn't support it (or a not-yet-enabled product) never blocks the
+    // whole Link flow. Liabilities data is pulled opportunistically during sync.
     const res = await plaid("/link/token/create", {
       ...base,
-      products: ["transactions", "liabilities"],
+      products: ["transactions"],
+      optional_products: ["liabilities"],
     });
     return json({ link_token: res.link_token });
   } catch (error) {

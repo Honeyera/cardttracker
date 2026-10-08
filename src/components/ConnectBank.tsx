@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -32,10 +32,20 @@ export function ConnectBank({ onSynced }: { onSynced?: () => void }) {
     [],
   );
 
-  const { open, ready } = usePlaidLink({ token: linkToken ?? '', onSuccess });
+  const { open, ready, error: linkError } = usePlaidLink({ token: linkToken ?? '', onSuccess });
 
-  // Open Link as soon as we have a token and the SDK is ready.
-  if (linkToken && ready) open();
+  // Open Link as soon as we have a token and the SDK is ready (effect, not render).
+  useEffect(() => {
+    if (linkToken && ready) open();
+  }, [linkToken, ready, open]);
+
+  // Surface Plaid Link init failures (e.g. bad token) instead of failing silently.
+  useEffect(() => {
+    if (linkError) {
+      toast.error(`Plaid Link error: ${linkError.message}`);
+      setLinkToken(null);
+    }
+  }, [linkError]);
 
   const connect = async () => {
     setPreparing(true);
