@@ -118,6 +118,25 @@ const ACCOUNT_COMPANY: Record<string, string> = {
 // last_four here (overrides the brand default).
 const CARD_COLOR_OVERRIDES: Record<string, CardColor> = {};
 
+// Plaid doesn't provide the cardholder's name or which business entity a card
+// belongs to, so (like ACCOUNT_COMPANY for banks) we map them here by last_four.
+// Company names use the same casing as ACCOUNT_COMPANY so cards group with their
+// company's bank accounts in the Company filter. Unknown/"not confirmed" => omit.
+const CARD_OWNER_OVERRIDES: Record<string, string> = {
+  '2005': 'Leo Mezbizer',
+  '0099': 'Tomer David',
+  '1012': 'Leo Mezbizer',
+};
+const CARD_COMPANY_OVERRIDES: Record<string, string> = {
+  '1001': 'HONEYERA',
+  '1003': 'HONEYERA',
+  '1004': 'TIDYCUBBIES',
+  '1007': 'HONEYERA',
+  '1008': 'HONEYERA',
+  '2001': 'BeeDecor',
+  '2005': 'HONEYERA',
+};
+
 function brandCardColor(name: string | null, company: string | null): CardColor {
   const s = `${name ?? ''} ${company ?? ''}`.toLowerCase();
   if (s.includes('amex') || s.includes('american express') || s.includes('gold') || s.includes('platinum')) return 'gold';
@@ -204,8 +223,10 @@ export function useFinanceData() {
       return (data ?? []).map((c: any) => ({
         id: c.id,
         name: c.name,
-        companyName: c.company_name ?? null,
-        ownerName: c.owner_name ?? null,
+        companyName: CARD_COMPANY_OVERRIDES[c.last_four] ?? c.company_name ?? null,
+        // c.owner_name is a Plaid placeholder (the institution name), so prefer
+        // our explicit map and otherwise show nothing rather than the bank name.
+        ownerName: CARD_OWNER_OVERRIDES[c.last_four] ?? null,
         lastFour: c.last_four ?? null,
         color: CARD_COLOR_OVERRIDES[c.last_four] ?? (c.network as CardColor) ?? brandCardColor(c.name, c.company_name),
         creditLimit: num(c.credit_limit),
