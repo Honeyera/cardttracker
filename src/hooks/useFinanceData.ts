@@ -135,6 +135,8 @@ const CARD_COMPANY_OVERRIDES: Record<string, string> = {
   '1008': 'HONEYERA',
   '2001': 'BeeDecor',
   '2005': 'HONEYERA',
+  '0099': 'HONEYERA',
+  '1012': 'HONEYERA',
 };
 
 function brandCardColor(name: string | null, company: string | null): CardColor {
