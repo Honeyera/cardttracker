@@ -99,21 +99,21 @@ const num = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-// Friendly display-name overrides for accounts, keyed by Plaid external_id.
-// The finance sync overwrites the `name` column from the bank on every sync,
-// so custom names are applied here at read time instead of in the database.
+// Friendly display-name overrides for accounts, keyed by last-4 (Plaid external_id
+// changes when a bank is re-linked, so last-4 is the stable key). The finance sync
+// overwrites the `name` column each sync, so names are applied here at read time.
 const ACCOUNT_NAME_OVERRIDES: Record<string, string> = {
-  ro9OOoV8o5h6dy34v8OjUxbZeRxQYdCrkpOvJ: 'HONEYERA Bank Account', // BofA ••4136
-  roAONO3dpahMjvOX836EFKZxk113M3uarB76D: 'TidyTeds Bank Account', // Chase ••3609
+  '4136': 'HONEYERA Bank Account', // Bank of America
+  '3609': 'TidyTeds Bank Account', // Chase BUS COMPLETE CHK
 };
 
-// Brand/company each bank account belongs to (banks carry no company field in
-// the synced data), keyed by Plaid external_id.
+// Brand/company each bank account belongs to (banks carry no company field in the
+// synced data), keyed by last-4.
 const ACCOUNT_COMPANY: Record<string, string> = {
-  ro9OOoV8o5h6dy34v8OjUxbZeRxQYdCrkpOvJ: 'HONEYERA',     // Bank of America "Honeyera Account" ••4136
-  waV0Bkk3qyhB7Q8Ld4BLTJvAB0YKxmtJApqrVn: 'BeeDecor',    // Mercury "BeeDecor Account" ••8375
-  ZVaqEMkLqmCkjqpej3RaIyZDL9jDqehk8ypJ1: 'TIDYCUBBIES',  // Mercury "TidyTeds Account" ••2521
-  roAONO3dpahMjvOX836EFKZxk113M3uarB76D: 'TIDYCUBBIES',  // Chase "BUS COMPLETE CHK" ••3609
+  '4136': 'HONEYERA',    // Bank of America ••4136
+  '8375': 'BeeDecor',    // Mercury ••8375
+  '2521': 'TIDYCUBBIES', // Mercury ••2521
+  '3609': 'TIDYCUBBIES', // Chase ••3609
 };
 
 // Tile color per card. Plaid doesn't give a brand color, so we derive one from
@@ -177,7 +177,7 @@ export function useFinanceData() {
       if (error) throw error;
       return (data ?? []).map((a: any) => ({
         id: a.id,
-        name: ACCOUNT_NAME_OVERRIDES[a.external_id] ?? a.name,
+        name: ACCOUNT_NAME_OVERRIDES[last4(a.last_four)] ?? a.name,
         institution: a.institution_name ?? null,
         accountType: a.account_type,
         accountSubtype: a.account_subtype ?? null,
@@ -186,7 +186,7 @@ export function useFinanceData() {
         availableBalance: num(a.available_balance),
         creditLimit: a.credit_limit == null ? null : num(a.credit_limit),
         isActive: a.is_active ?? true,
-        company: ACCOUNT_COMPANY[a.external_id] ?? null,
+        company: ACCOUNT_COMPANY[last4(a.last_four)] ?? null,
         updatedAt: a.updated_at ?? null,
       }));
     },
