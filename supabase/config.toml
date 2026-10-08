@@ -49,3 +49,6 @@ verify_jwt = false
 
 [functions.plaid-sync]
 verify_jwt = false
+
+[functions.plaid-manage]
+verify_jwt = false

@@ -2,16 +2,29 @@ import { useCallback, useEffect, useState } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Landmark, RefreshCw, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Landmark, RefreshCw, Loader2, Settings2, Trash2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
+interface PlaidItem {
+  item_id: string;
+  institution_name: string | null;
+  status: string;
+  last_synced_at: string | null;
+  last_error: string | null;
+}
+
 // "Connect bank" launches Plaid Link to add an institution; "Sync now" triggers
-// an immediate pull. Day-to-day syncing is automatic (daily pg_cron) — these are
-// for onboarding a bank and for an on-demand refresh.
+// an immediate pull; "Manage banks" lists connections and lets you remove one.
+// Day-to-day syncing is automatic (daily pg_cron).
 export function ConnectBank({ onSynced }: { onSynced?: () => void }) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [syncing, setSyncing] = useState(false);
+
+  const [manageOpen, setManageOpen] = useState(false);
+  const [items, setItems] = useState<PlaidItem[] | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
 
   const onSuccess = useCallback(
     async (public_token: string, metadata: any) => {
@@ -34,12 +47,10 @@ export function ConnectBank({ onSynced }: { onSynced?: () => void }) {
 
   const { open, ready, error: linkError } = usePlaidLink({ token: linkToken ?? '', onSuccess });
 
-  // Open Link as soon as we have a token and the SDK is ready (effect, not render).
   useEffect(() => {
     if (linkToken && ready) open();
   }, [linkToken, ready, open]);
 
-  // Surface Plaid Link init failures (e.g. bad token) instead of failing silently.
   useEffect(() => {
     if (linkError) {
       toast.error(`Plaid Link error: ${linkError.message}`);
@@ -75,6 +86,37 @@ export function ConnectBank({ onSynced }: { onSynced?: () => void }) {
     }
   };
 
+  const loadItems = async () => {
+    setItems(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('plaid-manage', { body: { action: 'list' } });
+      if (error || data?.error) throw new Error(error?.message || data?.error);
+      setItems(data.items ?? []);
+    } catch (e) {
+      toast.error(`Could not load banks: ${(e as Error).message}`);
+      setItems([]);
+    }
+  };
+
+  const removeItem = async (item: PlaidItem) => {
+    const label = item.institution_name ?? 'this bank';
+    if (!confirm(`Remove ${label}? This disconnects it and deletes its synced accounts, cards, and transactions.`)) return;
+    setRemoving(item.item_id);
+    try {
+      const { data, error } = await supabase.functions.invoke('plaid-manage', {
+        body: { action: 'remove', item_id: item.item_id },
+      });
+      if (error || data?.error) throw new Error(error?.message || data?.error);
+      toast.success(`Removed ${label}.`);
+      await loadItems();
+      onSynced?.();
+    } catch (e) {
+      toast.error(`Could not remove: ${(e as Error).message}`);
+    } finally {
+      setRemoving(null);
+    }
+  };
+
   return (
     <div className="flex items-center gap-2">
       <Button size="sm" variant="outline" onClick={connect} disabled={preparing}>
@@ -85,6 +127,59 @@ export function ConnectBank({ onSynced }: { onSynced?: () => void }) {
         {syncing ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
         Sync now
       </Button>
+
+      <Dialog open={manageOpen} onOpenChange={(o) => { setManageOpen(o); if (o) loadItems(); }}>
+        <DialogTrigger asChild>
+          <Button size="sm" variant="outline">
+            <Settings2 className="w-4 h-4 mr-1" />
+            Manage banks
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Connected banks</DialogTitle>
+          </DialogHeader>
+          {items === null ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          ) : items.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              No banks connected yet. Use “Connect bank” to add one.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {items.map((it) => (
+                <div key={it.item_id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{it.institution_name ?? 'Bank'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {it.status === 'needs_reauth' ? (
+                        <span className="text-destructive inline-flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" /> Needs reconnect
+                        </span>
+                      ) : it.last_synced_at ? (
+                        `Synced ${new Date(it.last_synced_at).toLocaleString()}`
+                      ) : (
+                        'Not synced yet'
+                      )}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => removeItem(it)}
+                    disabled={removing === it.item_id}
+                  >
+                    {removing === it.item_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
