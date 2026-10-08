@@ -65,6 +65,16 @@ serve(async (req) => {
     for (const item of items ?? []) {
       const result: any = { institution: item.institution_name, item_id: item.item_id, accounts: 0, transactions: 0 };
       try {
+        // Ensure Plaid notifies us of updates for this item (idempotent) so
+        // late-arriving transactions auto-sync — even for items linked before
+        // the webhook existed.
+        try {
+          await plaid("/item/webhook/update", {
+            access_token: item.access_token,
+            webhook: `${Deno.env.get("SUPABASE_URL")}/functions/v1/plaid-webhook`,
+          });
+        } catch (_) { /* non-fatal */ }
+
         // --- Accounts + balances ---
         const acctRes = await plaid("/accounts/get", { access_token: item.access_token });
         const plaidAccounts: any[] = acctRes.accounts ?? [];
