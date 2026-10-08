@@ -53,17 +53,36 @@ serve(async (req) => {
     auth: { persistSession: false },
   });
 
+  // Optional: sync a single item (the webhook passes the item that changed).
+  const reqBody = await req.json().catch(() => ({}));
+  const onlyItemId = reqBody?.item_id as string | undefined;
+
   try {
-    const { data: items, error: itemsErr } = await admin
-      .from("plaid_items")
-      .select("*")
-      .eq("status", "active");
+    let itemsQuery = admin.from("plaid_items").select("*").eq("status", "active");
+    if (onlyItemId) itemsQuery = itemsQuery.eq("item_id", onlyItemId);
+    const { data: items, error: itemsErr } = await itemsQuery;
     if (itemsErr) return json({ error: itemsErr.message }, 500);
 
     const summary: any[] = [];
 
     for (const item of items ?? []) {
       const result: any = { institution: item.institution_name, item_id: item.item_id, accounts: 0, transactions: 0 };
+
+      // Lock: claim this item so a concurrent sync (webhook + cron + manual)
+      // can't process it at the same time. Stale locks (>5 min) are reclaimable.
+      const staleBefore = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { data: claim } = await admin
+        .from("plaid_items")
+        .update({ syncing_at: nowIso() })
+        .eq("item_id", item.item_id)
+        .or(`syncing_at.is.null,syncing_at.lt.${staleBefore}`)
+        .select("item_id");
+      if (!claim || claim.length === 0) {
+        result.skipped = "already syncing";
+        summary.push(result);
+        continue;
+      }
+
       try {
         // Ensure Plaid notifies us of updates for this item (idempotent) so
         // late-arriving transactions auto-sync — even for items linked before
@@ -189,20 +208,35 @@ serve(async (req) => {
         }
 
         // --- Transactions (incremental via /transactions/sync) ---
-        let cursor = item.transactions_cursor ?? undefined;
-        let hasMore = true;
-        const added: any[] = [];
-        const modified: any[] = [];
-        const removed: string[] = [];
-        while (hasMore) {
-          const body: Record<string, unknown> = { access_token: item.access_token };
-          if (cursor) body.cursor = cursor;
-          const sync = await plaid("/transactions/sync", body);
-          added.push(...(sync.added ?? []));
-          modified.push(...(sync.modified ?? []));
-          removed.push(...(sync.removed ?? []).map((r: any) => r.transaction_id));
-          cursor = sync.next_cursor;
-          hasMore = sync.has_more;
+        // If the data mutates mid-pagination, Plaid says to restart from the
+        // original cursor. Retry the whole page loop up to 3 times.
+        const startCursor = item.transactions_cursor ?? undefined;
+        let cursor = startCursor;
+        let added: any[] = [];
+        let modified: any[] = [];
+        let removed: string[] = [];
+        for (let attempt = 0; ; attempt++) {
+          try {
+            cursor = startCursor;
+            added = [];
+            modified = [];
+            removed = [];
+            let hasMore = true;
+            while (hasMore) {
+              const body: Record<string, unknown> = { access_token: item.access_token };
+              if (cursor) body.cursor = cursor;
+              const sync = await plaid("/transactions/sync", body);
+              added.push(...(sync.added ?? []));
+              modified.push(...(sync.modified ?? []));
+              removed.push(...(sync.removed ?? []).map((r: any) => r.transaction_id));
+              cursor = sync.next_cursor;
+              hasMore = sync.has_more;
+            }
+            break;
+          } catch (e) {
+            if ((e as any)?.plaid?.error_code === "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION" && attempt < 3) continue;
+            throw e;
+          }
         }
 
         const toRow = (t: any) => {
@@ -248,6 +282,9 @@ serve(async (req) => {
           .from("plaid_items")
           .update({ last_error: msg, status: needsReauth ? "needs_reauth" : "active", updated_at: nowIso() })
           .eq("item_id", item.item_id);
+      } finally {
+        // Release the lock so the next sync can claim this item.
+        await admin.from("plaid_items").update({ syncing_at: null }).eq("item_id", item.item_id);
       }
       summary.push(result);
     }

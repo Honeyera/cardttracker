@@ -40,11 +40,11 @@ serve(async (req) => {
       (webhook_type === "ITEM" && webhook_code === "NEW_ACCOUNTS_AVAILABLE");
 
     if (shouldSync) {
-      // Fire a full sync (idempotent). plaid-sync authenticates via CRON_SECRET.
+      // Sync just the item that changed (idempotent). plaid-sync auths via CRON_SECRET.
       await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/plaid-sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "" },
-        body: "{}",
+        body: JSON.stringify(item_id ? { item_id } : {}),
       });
       return json({ ok: true, synced: true, webhook_code });
     }
