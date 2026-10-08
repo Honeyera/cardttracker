@@ -104,6 +104,7 @@ const num = (v: unknown): number => {
 // so custom names are applied here at read time instead of in the database.
 const ACCOUNT_NAME_OVERRIDES: Record<string, string> = {
   ro9OOoV8o5h6dy34v8OjUxbZeRxQYdCrkpOvJ: 'HONEYERA Bank Account', // BofA ••4136
+  roAONO3dpahMjvOX836EFKZxk113M3uarB76D: 'TidyTeds Bank Account', // Chase ••3609
 };
 
 // Brand/company each bank account belongs to (banks carry no company field in
