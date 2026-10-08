@@ -23,17 +23,21 @@ const nowIso = () => new Date().toISOString();
 function classifyTxn(t: any, isCredit: boolean): { type: string; amount: number } {
   const amount = Number(t.amount) || 0;
   const abs = Math.abs(amount);
+  const cat = (t.personal_finance_category?.detailed ?? t.personal_finance_category?.primary ?? "").toLowerCase();
+  const name = (t.name ?? "").toLowerCase();
+  const looksLikeCardPayment =
+    cat.includes("credit_card_payment") ||
+    cat.startsWith("loan_payments") ||
+    /autopay|e-?payment|card\s*(pmt|payment)|crd\s*pmt|cardmember|bill\s*pay|thank you/.test(name);
+
   if (isCredit) {
+    // On a card, a negative amount is money in: a real payment or a refund/credit.
     if (amount >= 0) return { type: "expense", amount: abs };
-    const cat = (t.personal_finance_category?.detailed ?? t.personal_finance_category?.primary ?? "").toLowerCase();
-    const name = (t.name ?? "").toLowerCase();
-    const isPayment =
-      cat.includes("credit_card_payment") ||
-      cat.startsWith("loan_payments") ||
-      /payment|autopay|thank you|bill pay|e-?payment/.test(name);
-    return { type: isPayment ? "payment" : "refund", amount: abs };
+    return { type: looksLikeCardPayment ? "payment" : "refund", amount: abs };
   }
-  return { type: amount >= 0 ? "expense" : "income", amount: abs };
+  // On a bank account, a positive amount is money out: a card payment or a purchase.
+  if (amount >= 0) return { type: looksLikeCardPayment ? "payment" : "expense", amount: abs };
+  return { type: "income", amount: abs };
 }
 
 function txnCategory(t: any): string | null {
