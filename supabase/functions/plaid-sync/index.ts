@@ -144,6 +144,40 @@ serve(async (req) => {
           );
         }
 
+        // --- Credit-card liabilities (statement/due/APR/min payment) ---
+        // Wrapped so a liabilities hiccup never blocks the transaction sync.
+        if (plaidAccounts.some((a) => a.type === "credit")) {
+          try {
+            const liab = await plaid("/liabilities/get", { access_token: item.access_token });
+            const dayOf = (d?: string | null) => (d ? new Date(d).getUTCDate() : null);
+            for (const c of liab.liabilities?.credit ?? []) {
+              const purchaseApr =
+                (c.aprs ?? []).find((x: any) => x.apr_type === "purchase_apr")?.apr_percentage ??
+                (c.aprs ?? [])[0]?.apr_percentage ??
+                null;
+              await admin
+                .from("credit_cards")
+                .update({
+                  last_statement_date: c.last_statement_issue_date ?? null,
+                  statement_date: dayOf(c.last_statement_issue_date),
+                  due_date: dayOf(c.next_payment_due_date),
+                  last_statement_balance: c.last_statement_balance ?? null,
+                  minimum_payment: c.minimum_payment_amount ?? null,
+                  next_payment_due_date: c.next_payment_due_date ?? null,
+                  last_payment_date: c.last_payment_date ?? null,
+                  last_payment_amount: c.last_payment_amount ?? null,
+                  purchase_apr: purchaseApr,
+                  is_overdue: c.is_overdue ?? false,
+                  finance_synced_at: nowIso(),
+                })
+                .eq("finance_external_account_id", c.account_id);
+            }
+            result.liabilities = (liab.liabilities?.credit ?? []).length;
+          } catch (e) {
+            result.liabilities_error = String((e as Error)?.message ?? e);
+          }
+        }
+
         // --- Transactions (incremental via /transactions/sync) ---
         let cursor = item.transactions_cursor ?? undefined;
         let hasMore = true;

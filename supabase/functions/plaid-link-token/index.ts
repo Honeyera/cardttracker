@@ -48,10 +48,11 @@ serve(async (req) => {
       return json({ link_token: res.link_token });
     }
 
-    // New connection: request transactions (covers depository + credit accounts).
+    // New connection: request transactions (depository + credit accounts) and
+    // liabilities (credit-card statement/due/APR/minimum-payment details).
     const res = await plaid("/link/token/create", {
       ...base,
-      products: ["transactions"],
+      products: ["transactions", "liabilities"],
     });
     return json({ link_token: res.link_token });
   } catch (error) {
