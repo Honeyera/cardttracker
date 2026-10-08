@@ -102,7 +102,9 @@ const num = (v: unknown): number => {
 // Friendly display-name overrides for accounts, keyed by Plaid external_id.
 // The finance sync overwrites the `name` column from the bank on every sync,
 // so custom names are applied here at read time instead of in the database.
-const ACCOUNT_NAME_OVERRIDES: Record<string, string> = {};
+const ACCOUNT_NAME_OVERRIDES: Record<string, string> = {
+  ro9OOoV8o5h6dy34v8OjUxbZeRxQYdCrkpOvJ: 'HONEYERA Bank Account', // BofA ••4136
+};
 
 // Brand/company each bank account belongs to (banks carry no company field in
 // the synced data), keyed by Plaid external_id.
