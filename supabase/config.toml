@@ -38,3 +38,14 @@ verify_jwt = false
 # HTTP ingestion endpoint for ChatGPT (Custom GPT Action). Shared-key auth in-code.
 [functions.ingest]
 verify_jwt = false
+
+# Plaid integration. All three verify the caller in-code (JWT, or CRON_SECRET for
+# the scheduled plaid-sync), so JWT enforcement is off.
+[functions.plaid-link-token]
+verify_jwt = false
+
+[functions.plaid-exchange]
+verify_jwt = false
+
+[functions.plaid-sync]
+verify_jwt = false

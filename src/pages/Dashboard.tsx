@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import { format, parseISO, differenceInCalendarDays } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,6 +9,7 @@ import { adSpendLimitFor, computeAdSpend, isAdTransaction, AdSpendStatus } from 
 import { cardColorClasses, CardColor } from '@/types/creditCard';
 import { UserMenu } from '@/components/UserMenu';
 import { AskBox } from '@/components/AskBox';
+import { ConnectBank } from '@/components/ConnectBank';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -179,6 +181,8 @@ function compareCards(a: FinanceCard, b: FinanceCard, sort: CardSort, paidFor: (
 const Dashboard = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const refreshFinance = () => queryClient.invalidateQueries({ queryKey: ['finance'] });
   const { accounts, transactions, cards, alerts, forecast, snapshots, availablePoints, loading, lastSyncedAt } = useFinanceData();
   const [company, setCompany] = useState('all');
   const [selectedCard, setSelectedCard] = useState<FinanceCard | null>(null);
@@ -468,6 +472,7 @@ const Dashboard = () => {
                 Synced {fmtDateTime(lastSyncedAt)}
               </span>
             )}
+            <ConnectBank onSynced={refreshFinance} />
             {companies.length > 0 && (
               <div className="flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-muted-foreground" />
@@ -496,7 +501,7 @@ const Dashboard = () => {
                 <div>
                   <p className="font-semibold text-foreground">Data hasn't synced in {syncDaysAgo != null ? `${syncDaysAgo} day${syncDaysAgo === 1 ? '' : 's'}` : 'a while'}</p>
                   <p className="text-sm text-muted-foreground">
-                    Last sync was {lastSyncedAt ? fmtDateTime(lastSyncedAt) : 'unknown'}. Balances and transactions may be out of date — run the sync in ChatGPT.
+                    Last sync was {lastSyncedAt ? fmtDateTime(lastSyncedAt) : 'unknown'}. Balances and transactions may be out of date — click "Sync now" above.
                   </p>
                 </div>
               </div>
