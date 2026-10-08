@@ -55,6 +55,10 @@ begin
   if p_conflict !~ '^[a-z_]+(\s*,\s*[a-z_]+)*$' then
     raise exception 'invalid conflict target: %', p_conflict;
   end if;
+  -- Empty batch is a valid no-op (used for safe connectivity probes).
+  if p_rows is null or jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) = 0 then
+    return jsonb_build_object('table', p_table, 'upserted', 0);
+  end if;
   -- Verify the conflict columns actually back a unique index (so ON CONFLICT is
   -- valid), rather than failing cryptically mid-statement.
   if not exists (
@@ -70,9 +74,6 @@ begin
       ) = (select array_agg(trim(x) order by trim(x)) from unnest(string_to_array(p_conflict, ',')) as x)
   ) then
     raise exception 'no unique index on %(%) to support ON CONFLICT', p_table, p_conflict;
-  end if;
-  if p_rows is null or jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) = 0 then
-    return jsonb_build_object('table', p_table, 'upserted', 0);
   end if;
 
   select string_agg(quote_ident(k), ', ') into v_cols
