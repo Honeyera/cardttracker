@@ -64,7 +64,7 @@ begin
     join pg_namespace ns on ns.oid = t.relnamespace
     where ns.nspname = 'public' and t.relname = p_table and i.indisunique
       and (
-        select array_agg(a.attname order by a.attname)
+        select array_agg(a.attname::text order by a.attname::text)
         from unnest(i.indkey) as k(attnum)
         join pg_attribute a on a.attrelid = i.indrelid and a.attnum = k.attnum
       ) = (select array_agg(trim(x) order by trim(x)) from unnest(string_to_array(p_conflict, ',')) as x)
