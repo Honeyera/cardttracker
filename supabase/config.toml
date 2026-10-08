@@ -52,3 +52,8 @@ verify_jwt = false
 
 [functions.plaid-manage]
 verify_jwt = false
+
+# Plaid calls this (unauthenticated to us); it only acts on known item ids and
+# triggers an idempotent sync.
+[functions.plaid-webhook]
+verify_jwt = false

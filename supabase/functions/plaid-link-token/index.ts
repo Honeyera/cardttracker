@@ -55,6 +55,10 @@ serve(async (req) => {
       ...base,
       products: ["transactions"],
       optional_products: ["liabilities"],
+      // Notify us when data is ready / changes, so we can auto-sync.
+      webhook: `${Deno.env.get("SUPABASE_URL")}/functions/v1/plaid-webhook`,
+      // Request ~2 years of history instead of the default 90 days.
+      transactions: { days_requested: 730 },
     });
     return json({ link_token: res.link_token });
   } catch (error) {
