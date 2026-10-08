@@ -15,9 +15,24 @@ const today = () => new Date().toISOString().slice(0, 10);
 const nowIso = () => new Date().toISOString();
 
 // Plaid amount is positive for money leaving the account, negative for money in.
-function classifyTxn(amount: number, isCredit: boolean): { type: string; amount: number } {
+// Classify a transaction. On a credit card, a negative amount is money coming in,
+// which is EITHER a real card payment OR a refund/statement credit — distinguish
+// them (misclassifying a refund as a payment falsely clears/flags statement due
+// logic). Only treat it as a payment when Plaid's category or the description says
+// so; otherwise it's a refund.
+function classifyTxn(t: any, isCredit: boolean): { type: string; amount: number } {
+  const amount = Number(t.amount) || 0;
   const abs = Math.abs(amount);
-  if (isCredit) return { type: amount >= 0 ? "expense" : "payment", amount: abs };
+  if (isCredit) {
+    if (amount >= 0) return { type: "expense", amount: abs };
+    const cat = (t.personal_finance_category?.detailed ?? t.personal_finance_category?.primary ?? "").toLowerCase();
+    const name = (t.name ?? "").toLowerCase();
+    const isPayment =
+      cat.includes("credit_card_payment") ||
+      cat.startsWith("loan_payments") ||
+      /payment|autopay|thank you|bill pay|e-?payment/.test(name);
+    return { type: isPayment ? "payment" : "refund", amount: abs };
+  }
   return { type: amount >= 0 ? "expense" : "income", amount: abs };
 }
 
@@ -242,7 +257,7 @@ serve(async (req) => {
         const toRow = (t: any) => {
           const link = map.get(t.account_id);
           const isCredit = link?.kind === "card";
-          const { type, amount } = classifyTxn(Number(t.amount) || 0, isCredit);
+          const { type, amount } = classifyTxn(t, isCredit);
           return {
             user_id: OWNER_USER_ID,
             external_id: t.transaction_id,
