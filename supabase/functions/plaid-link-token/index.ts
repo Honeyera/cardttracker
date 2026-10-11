@@ -54,7 +54,8 @@ serve(async (req) => {
     const res = await plaid("/link/token/create", {
       ...base,
       products: ["transactions"],
-      optional_products: ["liabilities"],
+      // NOTE: liabilities omitted — not enabled on the Plaid account yet. Re-add
+      // `optional_products: ["liabilities"]` once Liabilities access is approved.
       // Notify us when data is ready / changes, so we can auto-sync.
       webhook: `${Deno.env.get("SUPABASE_URL")}/functions/v1/plaid-webhook`,
       // Request ~2 years of history instead of the default 90 days.
