@@ -269,7 +269,15 @@ const Dashboard = () => {
       .filter((x) => x.due && x.due.days >= 0 && x.due.days <= 7 && !isSettled(x.card, paidFor(x.card.id)))
       .sort((a, b) => (a.due!.days - b.due!.days));
   }, [visibleCards]);
-  const dueSoonTotal = dueSoon.reduce((s, x) => s + x.card.currentBalance, 0);
+  // Sum what actually has to be paid (statement balance), not the full card
+  // balance — matches the per-card "Pay" amount.
+  const dueSoonTotal = dueSoon.reduce((s, x) => {
+    const c = x.card;
+    const amountDue = (c.lastStatementBalance && c.lastStatementBalance > 0.005)
+      ? c.lastStatementBalance
+      : (c.currentBalance || c.minimumPayment || c.totalBalance || 0);
+    return s + amountDue;
+  }, 0);
 
   // ── Activity roll-up, scoped to a selected period ──────────────────
   const activityFrom = activityPeriod === 'month' ? isoMonthStart()
