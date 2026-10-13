@@ -1124,8 +1124,20 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
       {/* Body — one hero number, then standing */}
       <div className="p-4 flex flex-col gap-3 flex-1">
         <div>
-          <p className="text-xs text-muted-foreground">Balance</p>
-          <p className="text-2xl font-bold text-card-foreground">{fmtMoney(card.currentBalance, { cents: true })}</p>
+          {!settled && stmtBal > 0.005 ? (
+            <>
+              {/* Lead with what must actually be paid (the statement balance),
+                  not the full card balance; show the total underneath. */}
+              <p className="text-xs text-muted-foreground">Statement balance due</p>
+              <p className="text-2xl font-bold text-card-foreground">{fmtMoney(stmtBal, { cents: true })}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Total balance {fmtMoney(card.currentBalance, { cents: true })}</p>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">Balance</p>
+              <p className="text-2xl font-bold text-card-foreground">{fmtMoney(card.currentBalance, { cents: true })}</p>
+            </>
+          )}
         </div>
 
         {utilization != null && (
