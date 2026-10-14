@@ -138,6 +138,7 @@ const CARD_OWNER_OVERRIDES: Record<string, string> = {
   '1008': 'Tomer David',
   '1007': 'Tomer David',
   '1003': 'Tomer David',
+  '1002': 'Tomer David',
   '0099': 'Tomer David',
 };
 const CARD_COMPANY_OVERRIDES: Record<string, string> = {
@@ -148,6 +149,7 @@ const CARD_COMPANY_OVERRIDES: Record<string, string> = {
   '1008': 'HONEYERA',
   '2001': 'BeeDecor',
   '2005': 'HONEYERA',
+  '1002': 'TIDYCUBBIES',
   '0099': 'HONEYERA',
   '1012': 'HONEYERA',
 };
