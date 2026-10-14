@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useFinanceData, FinanceAccount, FinanceCard, FinanceTransaction, FinanceAlert, ForecastPoint, BalanceSnapshot } from '@/hooks/useFinanceData';
 import { getNextOccurrence } from '@/utils/dateUtils';
 import { adSpendLimitFor, computeAdSpend, isAdTransaction, AdSpendStatus } from '@/utils/adSpend';
+import { detectRecurring, Cadence } from '@/utils/recurring';
 import { cardColorClasses, CardColor } from '@/types/creditCard';
 import { UserMenu } from '@/components/UserMenu';
 import { AskBox } from '@/components/AskBox';
@@ -18,7 +19,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceD
 import {
   Wallet, LayoutDashboard, CreditCard as CardIcon, Trophy, Loader2, Building2,
   ArrowDownRight, ArrowUpRight, Landmark, TrendingUp, TrendingDown, AlertTriangle,
-  CheckCircle2, CalendarClock, RefreshCw, Bell, ChevronRight, Percent, Megaphone, X,
+  CheckCircle2, CalendarClock, RefreshCw, Bell, ChevronRight, Percent, Megaphone, X, Repeat,
 } from 'lucide-react';
 
 const fmtMoney = (n: number, opts: { cents?: boolean } = {}) =>
@@ -309,6 +310,10 @@ const Dashboard = () => {
     return [...bankSide, ...unmatchedCardSide].sort((a, b) => b.date.localeCompare(a.date));
   }, [activityTxns]);
   const paymentsTotal = payments.reduce((s, t) => s + t.amount, 0);
+
+  // Recurring charges — detected from the FULL history (not the activity window).
+  const recurring = useMemo(() => detectRecurring(brandTxns), [brandTxns]);
+  const recurringMonthly = recurring.reduce((s, r) => s + r.monthlyEquivalent, 0);
 
   const cardName = (id: string | null) =>
     cards.find((c) => c.id === id)?.name ?? null;
@@ -722,6 +727,46 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
+
+            {/* Recurring charges — subscriptions / regular bills detected from history */}
+            {recurring.length > 0 && (
+              <div className="bg-card rounded-2xl border border-border p-5">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <SectionTitle icon={Repeat}>Recurring Charges</SectionTitle>
+                  <span className="text-sm text-muted-foreground">
+                    ~<span className="font-semibold text-foreground">{fmtMoney(recurringMonthly)}</span>/mo · {recurring.length} found
+                  </span>
+                </div>
+                <div className="mt-3 space-y-1.5">
+                  {recurring.slice(0, 10).map((r) => {
+                    const card = r.creditCardId ? cards.find((c) => c.id === r.creditCardId) : null;
+                    const acct = r.accountId ? accounts.find((a) => a.id === r.accountId) : null;
+                    const src = card ? `${card.name}${card.lastFour ? ` ••${card.lastFour}` : ''}`
+                      : acct ? `${acct.name}${acct.lastFour ? ` ••${acct.lastFour}` : ''}` : null;
+                    const cadenceLabel: Record<Cadence, string> = {
+                      weekly: 'Weekly', biweekly: 'Every 2 wks', monthly: 'Monthly', quarterly: 'Quarterly', yearly: 'Yearly',
+                    };
+                    return (
+                      <div key={r.key} className="flex items-center justify-between gap-3 py-1.5 border-b border-border/50 last:border-0">
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{r.label}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {cadenceLabel[r.cadence]} · {r.count}× · next {format(parseISO(r.nextExpectedDate), 'MMM d')}
+                            {src ? ` · ${src}` : ''}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-semibold">{fmtMoney(r.typicalAmount, { cents: true })}</p>
+                          {r.cadence !== 'monthly' && (
+                            <p className="text-[11px] text-muted-foreground">{fmtMoney(r.monthlyEquivalent)}/mo</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Payments + recent transactions */}
             <div className="grid gap-4 lg:grid-cols-2">
