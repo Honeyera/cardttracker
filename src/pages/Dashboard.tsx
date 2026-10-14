@@ -293,10 +293,21 @@ const Dashboard = () => {
   const income = activityTxns.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const refunds = activityTxns.filter((t) => t.type === 'refund').reduce((s, t) => s + t.amount, 0);
   const spend = activityTxns.filter((t) => t.type === 'expense' || t.type === 'fee').reduce((s, t) => s + t.amount, 0) - refunds;
-  // Card payments are recorded twice — once as the bank outflow (account_id, no
-  // card) and once on the card that received it (credit_card_id). Count only the
-  // bank-side outflow to avoid double-counting the same payment.
-  const payments = activityTxns.filter((t) => t.type === 'payment' && !t.creditCardId);
+  // Card payments can be recorded twice — once as the bank outflow (account_id,
+  // no card) and once on the card that received it (credit_card_id). Show every
+  // payment ONCE: all bank-side payments, plus any card-side payment that has no
+  // matching bank-side payment (its bank debit hasn't synced yet — common on
+  // Amex — or was paid from an unconnected account). Match by amount + near date.
+  const payments = useMemo(() => {
+    const bankSide = activityTxns.filter((t) => t.type === 'payment' && !t.creditCardId);
+    const cardSide = activityTxns.filter((t) => t.type === 'payment' && t.creditCardId);
+    const daysApart = (a: string, b: string) =>
+      Math.abs(differenceInCalendarDays(parseISO(a), parseISO(b)));
+    const unmatchedCardSide = cardSide.filter(
+      (cp) => !bankSide.some((bp) => Math.abs(bp.amount - cp.amount) < 0.005 && daysApart(bp.date, cp.date) <= 5),
+    );
+    return [...bankSide, ...unmatchedCardSide].sort((a, b) => b.date.localeCompare(a.date));
+  }, [activityTxns]);
   const paymentsTotal = payments.reduce((s, t) => s + t.amount, 0);
 
   const cardName = (id: string | null) =>
