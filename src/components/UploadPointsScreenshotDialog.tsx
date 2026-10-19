@@ -70,7 +70,13 @@ export function UploadPointsScreenshotDialog({
       // several cards share the name "Business Gold Card", so name-matching an
       // unmatched-by-digits card would wrongly attach it to a different card and
       // overwrite its points. No digit match → unmatched (surfaced to the user).
-      return existingCards.find((c) => normalizeDigits(c.lastFiveDigits) === digits) ?? null;
+      const exact = existingCards.find((c) => normalizeDigits(c.lastFiveDigits) === digits);
+      if (exact) return exact;
+      // Amex screenshots show 5 digits (e.g. 71001) while Plaid stores the
+      // 4-digit mask (1001) — compare trailing 4, but only accept a UNIQUE hit.
+      const last4 = digits.slice(-4);
+      const by4 = existingCards.filter((c) => normalizeDigits(c.lastFiveDigits).slice(-4) === last4);
+      return by4.length === 1 ? by4[0] : null;
     }
     // No digits on the screenshot: a name match is only safe when it's
     // unambiguous. If more than one card shares the name, don't guess.
