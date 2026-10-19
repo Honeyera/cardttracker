@@ -779,7 +779,7 @@ const Dashboard = () => {
                         <div className="min-w-0">
                           <p className="font-medium truncate">{r.label}</p>
                           <p className="text-xs text-muted-foreground truncate">
-                            {cadenceLabel[r.cadence]} · {r.count}× · next {format(parseISO(r.nextExpectedDate), 'MMM d')}
+                            {cadenceLabel[r.cadence]} · {r.count}× · last {format(parseISO(r.lastDate), 'MMM d')} · next {format(parseISO(r.nextExpectedDate), 'MMM d')}
                             {src ? ` · ${src}` : ''}
                           </p>
                         </div>
