@@ -105,6 +105,7 @@ const num = (v: unknown): number => {
 const ACCOUNT_NAME_OVERRIDES: Record<string, string> = {
   '4136': 'HONEYERA Bank Account', // Bank of America
   '3609': 'TidyTeds Bank Account', // Chase BUS COMPLETE CHK
+  '8375': 'BeeDecor Bank Account', // Mercury Checking
 };
 
 // Brand/company each bank account belongs to (banks carry no company field in the
