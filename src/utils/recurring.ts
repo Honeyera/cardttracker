@@ -111,6 +111,10 @@ export function detectRecurring(transactions: FinanceTransaction[]): RecurringCh
 
     const first = byDate[0];
     const last = byDate[byDate.length - 1];
+
+    // Only ACTIVE recurring charges: nothing billed in the last 3 months means
+    // the subscription ended (or lapsed) — don't list it.
+    if (daysBetween(last.date, new Date().toISOString().slice(0, 10)) > 90) continue;
     out.push({
       key: gkey,
       label: titleCase((last.merchantName || last.description || 'Charge').toLowerCase()).slice(0, 48),
