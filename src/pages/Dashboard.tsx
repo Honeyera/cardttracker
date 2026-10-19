@@ -728,6 +728,34 @@ const Dashboard = () => {
               </div>
             </div>
 
+            {/* Payments + recent transactions */}
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="bg-card rounded-2xl border border-border p-5">
+                <SectionTitle icon={CheckCircle2}>Recent Payments</SectionTitle>
+                {payments.length === 0 ? (
+                  <Empty>No card payments in the synced period.</Empty>
+                ) : (
+                  <div className="space-y-2 mt-3">
+                    {payments.slice(0, 8).map((t) => (
+                      <TxnRow key={t.id} txn={t} source={paymentDestCard(t) ? `→ ${paymentDestCard(t)}` : sourceOf(t)} />
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="bg-card rounded-2xl border border-border p-5">
+                <SectionTitle icon={TrendingDown}>Recent Transactions</SectionTitle>
+                {brandTxns.length === 0 ? (
+                  <Empty>No transactions synced yet.</Empty>
+                ) : (
+                  <div className="space-y-2 mt-3">
+                    {brandTxns.filter((t) => t.type !== 'payment').slice(0, 8).map((t) => (
+                      <TxnRow key={t.id} txn={t} source={sourceOf(t)} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Recurring charges — subscriptions / regular bills detected from history */}
             {recurring.length > 0 && (
               <div className="bg-card rounded-2xl border border-border p-5">
@@ -767,34 +795,6 @@ const Dashboard = () => {
                 </div>
               </div>
             )}
-
-            {/* Payments + recent transactions */}
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="bg-card rounded-2xl border border-border p-5">
-                <SectionTitle icon={CheckCircle2}>Recent Payments</SectionTitle>
-                {payments.length === 0 ? (
-                  <Empty>No card payments in the synced period.</Empty>
-                ) : (
-                  <div className="space-y-2 mt-3">
-                    {payments.slice(0, 8).map((t) => (
-                      <TxnRow key={t.id} txn={t} source={paymentDestCard(t) ? `→ ${paymentDestCard(t)}` : sourceOf(t)} />
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="bg-card rounded-2xl border border-border p-5">
-                <SectionTitle icon={TrendingDown}>Recent Transactions</SectionTitle>
-                {brandTxns.length === 0 ? (
-                  <Empty>No transactions synced yet.</Empty>
-                ) : (
-                  <div className="space-y-2 mt-3">
-                    {brandTxns.filter((t) => t.type !== 'payment').slice(0, 8).map((t) => (
-                      <TxnRow key={t.id} txn={t} source={sourceOf(t)} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
           </>
         )}
       </main>
