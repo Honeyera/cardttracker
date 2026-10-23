@@ -28,3 +28,7 @@ dist-ssr
 
 # Supabase CLI local state
 supabase/.temp/
+
+# Local per-environment secrets (never commit; each box/PC has its own)
+.env
+.env.local
