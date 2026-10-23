@@ -23,6 +23,7 @@ export interface FinanceAccount {
   isActive: boolean;
   company: string | null;
   updatedAt: string | null;
+  logoUrl: string | null;
 }
 
 export type TransactionDirection = 'expense' | 'income' | 'payment' | 'transfer' | string;
@@ -65,6 +66,7 @@ export interface FinanceCard {
   isOverdue: boolean;
   paymentStatus: string | null;
   syncedAt: string | null;
+  logoUrl: string | null;
 }
 
 export interface FinanceAlert {
@@ -160,6 +162,7 @@ export function useFinanceData() {
         isActive: a.is_active ?? true,
         company: ACCOUNT_COMPANY[last4(a.last_four)] ?? null,
         updatedAt: a.updated_at ?? null,
+        logoUrl: a.logo_url ?? null,
       }));
     },
   });
@@ -231,6 +234,7 @@ export function useFinanceData() {
         isOverdue: c.is_overdue ?? false,
         paymentStatus: c.payment_status ?? null,
         syncedAt: c.finance_synced_at ?? null,
+        logoUrl: c.logo_url ?? null,
       }));
     },
   });

@@ -118,6 +118,24 @@ serve(async (req) => {
         const plaidAccounts: any[] = acctRes.accounts ?? [];
         const instName = item.institution_name ?? acctRes.item?.institution_id ?? null;
 
+        // Institution logo (best-effort): Plaid returns a base64 PNG + brand
+        // color per institution. Fetched once per item; if it fails we just
+        // leave the existing logo untouched.
+        let instLogo: string | null = null;
+        const instId = item.institution_id ?? acctRes.item?.institution_id ?? null;
+        if (instId) {
+          try {
+            const inst = await plaid("/institutions/get_by_id", {
+              institution_id: instId,
+              country_codes: ["US"],
+              options: { include_optional_metadata: true },
+            });
+            const logo = inst.institution?.logo;
+            if (logo) instLogo = `data:image/png;base64,${logo}`;
+          } catch (_) { /* logo is cosmetic — never block the sync */ }
+        }
+        const logoField = instLogo ? { logo_url: instLogo } : {};
+
         // Map Plaid account_id -> { kind, ourId } for linking transactions.
         const map = new Map<string, { kind: "account" | "card" }>();
 
@@ -137,6 +155,7 @@ serve(async (req) => {
                 current_balance: bal.current ?? 0,
                 total_balance: bal.current ?? 0,
                 finance_synced_at: nowIso(),
+                ...logoField,
               },
               { onConflict: "finance_external_account_id" },
             );
@@ -154,6 +173,7 @@ serve(async (req) => {
                 available_balance: bal.available ?? bal.current ?? 0,
                 is_active: true,
                 updated_at: nowIso(),
+                ...logoField,
               },
               { onConflict: "external_id" },
             );

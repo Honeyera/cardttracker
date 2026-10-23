@@ -871,8 +871,10 @@ function AccountTile({ account, history, onClick }: {
     <button type="button" onClick={onClick}
       className="bg-card rounded-2xl border border-border p-4 shadow-sm text-left w-full hover:border-primary/40 hover:shadow-md transition-all">
       <div className="flex items-center gap-2 mb-2">
-        <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-          <Landmark className="w-4 h-4" />
+        <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 overflow-hidden">
+          {account.logoUrl
+            ? <img src={account.logoUrl} alt="" className="w-full h-full object-contain" />
+            : <Landmark className="w-4 h-4" />}
         </div>
         <p className="font-semibold text-sm truncate flex-1 min-w-0">{account.name}</p>
         <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -1160,14 +1162,21 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
           </p>
           {card.ownerName && <p className="text-xs text-white/70 truncate">{card.ownerName}</p>}
         </div>
-        {points != null && (
-          <div className="text-right shrink-0 leading-tight">
-            <p className="text-sm font-bold flex items-center gap-1 justify-end">
-              <Trophy className="w-3.5 h-3.5" />{points.toLocaleString('en-US')}
-            </p>
-            <p className="text-[10px] text-white/80 uppercase tracking-wide">points</p>
-          </div>
-        )}
+        <div className="flex items-start gap-2 shrink-0">
+          {points != null && (
+            <div className="text-right leading-tight">
+              <p className="text-sm font-bold flex items-center gap-1 justify-end">
+                <Trophy className="w-3.5 h-3.5" />{points.toLocaleString('en-US')}
+              </p>
+              <p className="text-[10px] text-white/80 uppercase tracking-wide">points</p>
+            </div>
+          )}
+          {card.logoUrl && (
+            <div className="w-8 h-8 rounded-md bg-white/90 flex items-center justify-center overflow-hidden shrink-0">
+              <img src={card.logoUrl} alt="" className="w-full h-full object-contain p-0.5" />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Status strip — tinted by state so overdue vs paid reads at a glance */}
