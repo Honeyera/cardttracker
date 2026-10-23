@@ -253,6 +253,13 @@ const Dashboard = () => {
     [accounts, company],
   );
 
+  const loans = useMemo(
+    () => accounts
+      .filter((a) => a.accountType === 'loan')
+      .filter((a) => company === 'all' || a.company === company),
+    [accounts, company],
+  );
+
   // A transaction belongs to the selected brand if its card or its account does.
   const brandTxns = useMemo(() => {
     if (company === 'all') return transactions;
@@ -656,6 +663,23 @@ const Dashboard = () => {
               )}
             </div>
 
+            {/* Loans / leases — liabilities, shown separately from cash */}
+            {loans.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <SectionTitle icon={Landmark}>Loans</SectionTitle>
+                  <span className="text-sm font-semibold text-muted-foreground">
+                    {fmtMoney(loans.reduce((s, a) => s + a.currentBalance, 0), { cents: true })} owed
+                  </span>
+                </div>
+                <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                  {loans.map((a) => (
+                    <LoanTile key={a.id} account={a} onClick={() => setSelectedAccount(a)} />
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Cash projection */}
             {forecast.length > 0 && (
               <div className="bg-card rounded-2xl border border-border p-5">
@@ -898,6 +922,30 @@ function AccountTile({ account, history, onClick }: {
         </p>
         {history.length > 1 && <Sparkline data={history} />}
       </div>
+    </button>
+  );
+}
+
+function LoanTile({ account, onClick }: { account: FinanceAccount; onClick?: () => void }) {
+  return (
+    <button type="button" onClick={onClick}
+      className="bg-card rounded-2xl border border-border p-4 shadow-sm text-left w-full hover:border-primary/40 hover:shadow-md transition-all">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 overflow-hidden">
+          {account.logoUrl
+            ? <img src={account.logoUrl} alt="" className="w-full h-full object-contain" />
+            : <Landmark className="w-4 h-4" />}
+        </div>
+        <p className="font-semibold text-sm truncate flex-1 min-w-0">{account.name}</p>
+        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+      </div>
+      <p className="text-xs text-muted-foreground truncate mb-1.5">
+        {account.institution ?? 'Loan'}
+        {account.lastFour ? ` •••• ${account.lastFour}` : ''}
+        {' · '}{account.accountSubtype ?? account.accountType}
+      </p>
+      <p className="text-2xl font-bold text-card-foreground truncate">{fmtMoney(account.currentBalance, { cents: true })}</p>
+      <p className="text-xs text-muted-foreground mt-1">balance owed</p>
     </button>
   );
 }
