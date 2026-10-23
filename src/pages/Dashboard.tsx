@@ -1397,6 +1397,9 @@ function CardDetailDialog({ card, adSpend, transactions, onColorChange, onClose 
 }) {
   const open = card != null;
   const due = card ? resolveDue(card) : null;
+  const [pendingColor, setPendingColor] = useState<string>('#1e3a8a');
+  useEffect(() => { setPendingColor(card?.tileColor ?? '#1e3a8a'); }, [card?.id, card?.tileColor]);
+  const colorDirty = card != null && (card.tileColor ?? null) !== pendingColor;
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-4xl w-[95vw] max-h-[85vh] overflow-hidden flex flex-col">
@@ -1406,17 +1409,24 @@ function CardDetailDialog({ card, adSpend, transactions, onColorChange, onClose 
               <DialogTitle>{card.name} <span className="text-muted-foreground font-normal">•••• {card.lastFour}</span></DialogTitle>
             </DialogHeader>
             {onColorChange && (
-              <div className="flex items-center gap-3 shrink-0 -mt-1">
+              <div className="flex items-center gap-3 shrink-0 -mt-1 flex-wrap">
                 <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Tile color</span>
+                {/* Live preview of the header gradient at the chosen color */}
+                <div className="h-7 w-20 rounded-md border border-border shrink-0"
+                  style={{ backgroundImage: `linear-gradient(to right, ${pendingColor}, color-mix(in srgb, ${pendingColor} 65%, black))` }} />
                 <label className="relative w-7 h-7 rounded-md border border-border overflow-hidden cursor-pointer shrink-0">
                   <input
                     type="color"
-                    value={card.tileColor ?? '#1e3a8a'}
-                    onChange={(e) => onColorChange(card.id, e.target.value)}
+                    value={pendingColor}
+                    onChange={(e) => setPendingColor(e.target.value)}
                     className="absolute inset-0 w-[150%] h-[150%] -left-1/4 -top-1/4 cursor-pointer"
                     title="Pick a custom tile color"
                   />
                 </label>
+                <Button size="sm" className="h-7 text-xs" disabled={!colorDirty}
+                  onClick={() => onColorChange(card.id, pendingColor)}>
+                  Save color
+                </Button>
                 {card.tileColor && (
                   <Button variant="ghost" size="sm" className="h-7 text-xs"
                     onClick={() => onColorChange(card.id, null)}>
