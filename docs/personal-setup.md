@@ -23,14 +23,13 @@ npm install
 3. Project Settings → API: copy the Project URL and the anon/publishable key.
 
 ## 4. Apply the database schema
-```bash
-supabase login
-supabase link --project-ref <your-project-ref>
-supabase db push          # applies everything in supabase/migrations/
-```
-Then open the SQL editor in the Supabase dashboard and run
-`docs/personal-schema-fixups.sql` (hand-applied production changes the
-migrations don't cover).
+The migrations in `supabase/migrations/` are incomplete — the core finance
+tables were created at the original project's genesis and never captured there.
+Instead, load the complete schema in one shot: open the Supabase dashboard →
+**SQL Editor** → paste the entire contents of `docs/full-schema.sql` → **Run**.
+It enables pgcrypto, (re)creates every table with the correct structure,
+restores Supabase grants, and applies the transaction fix-ups. Safe to run on a
+fresh or half-built project (it resets the `public` schema first).
 
 ## 5. Edge Function secrets
 Dashboard → Edge Functions → Secrets (or `supabase secrets set K=V`):
