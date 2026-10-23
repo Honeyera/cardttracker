@@ -102,20 +102,11 @@ const num = (v: unknown): number => {
 // Friendly display-name overrides for accounts, keyed by last-4 (Plaid external_id
 // changes when a bank is re-linked, so last-4 is the stable key). The finance sync
 // overwrites the `name` column each sync, so names are applied here at read time.
-const ACCOUNT_NAME_OVERRIDES: Record<string, string> = {
-  '4136': 'HONEYERA Bank Account', // Bank of America
-  '3609': 'TidyTeds Bank Account', // Chase BUS COMPLETE CHK
-  '8375': 'BeeDecor Bank Account', // Mercury Checking
-};
+const ACCOUNT_NAME_OVERRIDES: Record<string, string> = {};
 
 // Brand/company each bank account belongs to (banks carry no company field in the
 // synced data), keyed by last-4.
-const ACCOUNT_COMPANY: Record<string, string> = {
-  '4136': 'HONEYERA',    // Bank of America ••4136
-  '8375': 'BeeDecor',    // Mercury ••8375
-  '2521': 'TIDYCUBBIES', // Mercury ••2521
-  '3609': 'TIDYCUBBIES', // Chase ••3609
-};
+const ACCOUNT_COMPANY: Record<string, string> = {};
 
 // Tile color per card. Plaid doesn't give a brand color, so we derive one from
 // the card/issuer name. To pin a specific card to a specific color, add its
@@ -130,30 +121,8 @@ const CARD_COLOR_OVERRIDES: Record<string, CardColor> = {};
 // company's bank accounts in the Company filter.
 const last4 = (lf: string | null | undefined): string => String(lf ?? '').slice(-4);
 
-const CARD_OWNER_OVERRIDES: Record<string, string> = {
-  '1001': 'Leo Mezbizer',
-  '2001': 'Leo Mezbizer',
-  '1004': 'Leo Mezbizer',
-  '2005': 'Leo Mezbizer',
-  '1012': 'Leo Mezbizer',
-  '1008': 'Tomer David',
-  '1007': 'Tomer David',
-  '1003': 'Tomer David',
-  '1002': 'Tomer David',
-  '0099': 'Tomer David',
-};
-const CARD_COMPANY_OVERRIDES: Record<string, string> = {
-  '1001': 'HONEYERA',
-  '1003': 'HONEYERA',
-  '1004': 'TIDYCUBBIES',
-  '1007': 'HONEYERA',
-  '1008': 'HONEYERA',
-  '2001': 'BeeDecor',
-  '2005': 'HONEYERA',
-  '1002': 'TIDYCUBBIES',
-  '0099': 'HONEYERA',
-  '1012': 'HONEYERA',
-};
+const CARD_OWNER_OVERRIDES: Record<string, string> = {};
+const CARD_COMPANY_OVERRIDES: Record<string, string> = {};
 
 function brandCardColor(name: string | null, company: string | null): CardColor {
   const s = `${name ?? ''} ${company ?? ''}`.toLowerCase();
