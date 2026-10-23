@@ -12,6 +12,7 @@ import { UserMenu } from '@/components/UserMenu';
 import { AskBox } from '@/components/AskBox';
 import { ConnectBank } from '@/components/ConnectBank';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
@@ -184,6 +185,11 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const refreshFinance = () => queryClient.invalidateQueries({ queryKey: ['finance'] });
+  // Persist a per-card custom tile color (hex), or null to reset to automatic.
+  const setCardColor = async (id: string, color: string | null) => {
+    await (supabase as any).from('credit_cards').update({ tile_color: color }).eq('id', id);
+    refreshFinance();
+  };
   const { accounts, transactions, cards, alerts, forecast, snapshots, availablePoints, loading, lastSyncedAt } = useFinanceData();
   const [company, setCompany] = useState('all');
   const [selectedCard, setSelectedCard] = useState<FinanceCard | null>(null);
@@ -803,6 +809,7 @@ const Dashboard = () => {
         card={selectedCard}
         adSpend={selectedCard ? adSpendByCard.get(selectedCard.id) : undefined}
         transactions={selectedCard ? transactions.filter((t) => t.creditCardId === selectedCard.id) : []}
+        onColorChange={setCardColor}
         onClose={() => setSelectedCard(null)}
       />
 
@@ -1086,6 +1093,11 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
   const settled = isSettled(card, paidTowardStatement);
   const risk = interestRisk(card, paidTowardStatement);
   const gradient = cardColorClasses[(card.color as CardColor)] ?? cardColorClasses.navy;
+  // A user-set custom hex overrides the auto palette: build a gradient from it
+  // (base → a darker shade) via inline style instead of a preset class.
+  const customHeaderStyle = card.tileColor
+    ? { backgroundImage: `linear-gradient(to right, ${card.tileColor}, color-mix(in srgb, ${card.tileColor} 65%, black))` }
+    : undefined;
   const utilization = card.creditLimit > 0 ? Math.min(1, card.currentBalance / card.creditLimit) : null;
 
   // Amount to pay: the statement balance (what's due for the cycle), with
@@ -1154,7 +1166,7 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
         card.isOverdue && 'ring-1 ring-destructive/40',
       )}>
       {/* Identity header — name, digits, company. Status lives in the strip below. */}
-      <div className={cn('bg-gradient-to-r px-4 py-2.5 text-white flex items-start justify-between gap-2', gradient)}>
+      <div className={cn('px-4 py-2.5 text-white flex items-start justify-between gap-2', !card.tileColor && 'bg-gradient-to-r', !card.tileColor && gradient)} style={customHeaderStyle}>
         <div className="min-w-0">
           <p className="font-semibold leading-tight truncate">{card.name}</p>
           <p className="text-xs text-white/80 truncate">
@@ -1379,8 +1391,9 @@ function TransactionsPanel({ transactions, resetKey, showAdsFilter }: {
   );
 }
 
-function CardDetailDialog({ card, adSpend, transactions, onClose }: {
-  card: FinanceCard | null; adSpend?: AdSpendStatus; transactions: FinanceTransaction[]; onClose: () => void;
+function CardDetailDialog({ card, adSpend, transactions, onColorChange, onClose }: {
+  card: FinanceCard | null; adSpend?: AdSpendStatus; transactions: FinanceTransaction[];
+  onColorChange?: (id: string, color: string | null) => void | Promise<void>; onClose: () => void;
 }) {
   const open = card != null;
   const due = card ? resolveDue(card) : null;
@@ -1392,6 +1405,26 @@ function CardDetailDialog({ card, adSpend, transactions, onClose }: {
             <DialogHeader className="shrink-0">
               <DialogTitle>{card.name} <span className="text-muted-foreground font-normal">•••• {card.lastFour}</span></DialogTitle>
             </DialogHeader>
+            {onColorChange && (
+              <div className="flex items-center gap-3 shrink-0 -mt-1">
+                <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Tile color</span>
+                <label className="relative w-7 h-7 rounded-md border border-border overflow-hidden cursor-pointer shrink-0">
+                  <input
+                    type="color"
+                    value={card.tileColor ?? '#1e3a8a'}
+                    onChange={(e) => onColorChange(card.id, e.target.value)}
+                    className="absolute inset-0 w-[150%] h-[150%] -left-1/4 -top-1/4 cursor-pointer"
+                    title="Pick a custom tile color"
+                  />
+                </label>
+                {card.tileColor && (
+                  <Button variant="ghost" size="sm" className="h-7 text-xs"
+                    onClick={() => onColorChange(card.id, null)}>
+                    Reset to automatic
+                  </Button>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4 text-sm shrink-0">
               <Field label="Current Balance (owed now)">{fmtMoney(card.currentBalance, { cents: true })}</Field>
               <Field label="Last Statement">

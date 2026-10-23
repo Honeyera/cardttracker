@@ -67,6 +67,7 @@ export interface FinanceCard {
   paymentStatus: string | null;
   syncedAt: string | null;
   logoUrl: string | null;
+  tileColor: string | null; // user-set custom hex; overrides the auto color
 }
 
 export interface FinanceAlert {
@@ -235,6 +236,7 @@ export function useFinanceData() {
         paymentStatus: c.payment_status ?? null,
         syncedAt: c.finance_synced_at ?? null,
         logoUrl: c.logo_url ?? null,
+        tileColor: c.tile_color ?? null,
       }));
     },
   });
