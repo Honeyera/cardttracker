@@ -9,7 +9,6 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp
 import { Wallet, Mail, Lock, Loader2, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { mfaLogin, mfaVerify } from '@/lib/mfa';
 import { z } from 'zod';
 
 const authSchema = z.object({
@@ -17,69 +16,62 @@ const authSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
-// Route login through the mfa function (enforces email 2FA for enrolled users).
-const MFA_LOGIN_ENABLED = true;
-
 const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
-  // Email-2FA step: once a code has been mailed, we hold the challenge id and
-  // the entered password (needed again to mint the session on verify).
-  const [mfaChallenge, setMfaChallenge] = useState<{ challengeId: string; password: string } | null>(null);
+  // TOTP step-up: once a password check passes and a verified factor exists, we
+  // hold the factor + challenge ids and show the authenticator-code input.
+  const [mfaChallenge, setMfaChallenge] = useState<{ factorId: string; challengeId: string } | null>(null);
   const [otp, setOtp] = useState('');
-  const [rememberDevice, setRememberDevice] = useState(true);
   const [verifying, setVerifying] = useState(false);
-  const { signIn, user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (user && !authLoading) {
+  // Given an authenticated (possibly AAL1) session, either prompt for the
+  // authenticator code (if a verified TOTP factor requires step-up) or proceed.
+  const proceedAfterAuth = async () => {
+    try {
+      const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (!error && data?.nextLevel === 'aal2' && data.currentLevel === 'aal1') {
+        const { data: f } = await supabase.auth.mfa.listFactors();
+        const totp = (f?.totp ?? []).find((x) => x.status === 'verified');
+        if (totp) {
+          const { data: ch, error: chErr } = await supabase.auth.mfa.challenge({ factorId: totp.id });
+          if (!chErr && ch) { setMfaChallenge({ factorId: totp.id, challengeId: ch.id }); setOtp(''); return; }
+        }
+      }
+      navigate('/');
+    } catch {
       navigate('/');
     }
-  }, [user, authLoading, navigate]);
+  };
+
+  // React to an authenticated session (fresh login or an existing one): decide
+  // whether a second factor is still required before entering the app.
+  useEffect(() => {
+    if (authLoading || !user || mfaChallenge || loading) return;
+    proceedAfterAuth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, authLoading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validate input
+
     const result = authSchema.safeParse({ email, password });
     if (!result.success) {
-      const errors = result.error.errors;
-      toast.error(errors[0].message);
+      toast.error(result.error.errors[0].message);
       return;
     }
 
     setLoading(true);
-
     try {
-      if (!MFA_LOGIN_ENABLED) {
-        // Direct sign-in (pre-2FA flow) — the reliable path while debugging.
-        const { error } = await signIn(email, password);
-        if (error) throw error;
-        toast.success('Welcome back!');
-        navigate('/');
-        return;
-      }
-      const result = await mfaLogin(email, password);
-      if (result.status === 'mfa_required') {
-        setMfaChallenge({ challengeId: result.challengeId, password });
-        setOtp('');
-        toast.success('We emailed you a 6-digit sign-in code.');
-      } else if (result.status === 'authenticated') {
-        // No 2FA for this user — apply the session the function returned.
-        await supabase.auth.setSession(result.session);
-        toast.success('Welcome back!');
-        navigate('/');
-      } else {
-        // Bootstrap: the mfa function isn't deployed yet — sign in directly.
-        const { error } = await signIn(email, password);
-        if (error) throw error;
-        toast.success('Welcome back!');
-        navigate('/');
-      }
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      // The session now exists (AAL1). Step up to AAL2 if a factor requires it.
+      await proceedAfterAuth();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Sign in failed';
       toast.error(msg.includes('Invalid login credentials') ? 'Invalid email or password' : msg);
@@ -92,8 +84,12 @@ const Auth = () => {
     if (!mfaChallenge) return;
     setVerifying(true);
     try {
-      const session = await mfaVerify(email, mfaChallenge.password, mfaChallenge.challengeId, code, rememberDevice);
-      await supabase.auth.setSession(session);
+      const { error } = await supabase.auth.mfa.verify({
+        factorId: mfaChallenge.factorId,
+        challengeId: mfaChallenge.challengeId,
+        code,
+      });
+      if (error) throw error;
       toast.success('Welcome back!');
       navigate('/');
     } catch (err) {
@@ -132,7 +128,7 @@ const Auth = () => {
                   <ShieldCheck className="w-5 h-5" />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Enter the 6-digit code we sent to<br /><span className="font-medium text-foreground">{email}</span>
+                  Enter the 6-digit code from your<br /><span className="font-medium text-foreground">authenticator app</span>
                 </p>
               </div>
               <div className="flex justify-center">
@@ -150,17 +146,12 @@ const Auth = () => {
                   </InputOTPGroup>
                 </InputOTP>
               </div>
-              <label className="flex items-center justify-center gap-2 text-sm text-muted-foreground cursor-pointer">
-                <input type="checkbox" className="rounded border-input"
-                  checked={rememberDevice} onChange={(e) => setRememberDevice(e.target.checked)} disabled={verifying} />
-                Trust this device for 30 days
-              </label>
               <Button className="w-full" disabled={verifying || otp.length !== 6} onClick={() => handleVerifyOtp(otp)}>
                 {verifying && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                 Verify &amp; Sign In
               </Button>
               <div className="text-center">
-                <button type="button" onClick={() => { setMfaChallenge(null); setOtp(''); }}
+                <button type="button" onClick={async () => { setMfaChallenge(null); setOtp(''); await supabase.auth.signOut(); }}
                   className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
                   <ArrowLeft className="w-3 h-3" /> Back to sign in
                 </button>

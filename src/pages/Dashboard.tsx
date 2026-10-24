@@ -210,7 +210,13 @@ const Dashboard = () => {
   });
 
   useEffect(() => {
-    if (!authLoading && !user) navigate('/auth');
+    if (authLoading) return;
+    if (!user) { navigate('/auth'); return; }
+    // Enforce 2FA: if a verified factor requires step-up and the session is only
+    // AAL1, bounce to the login screen to complete the authenticator code.
+    supabase.auth.mfa.getAuthenticatorAssuranceLevel().then(({ data, error }) => {
+      if (!error && data?.nextLevel === 'aal2' && data.currentLevel === 'aal1') navigate('/auth');
+    }).catch(() => {});
   }, [user, authLoading, navigate]);
 
   const companies = useMemo(
