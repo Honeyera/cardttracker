@@ -23,8 +23,13 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
     if (authError || !user) return json({ error: "Invalid or expired session" }, 401);
 
-    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!apiKey) return json({ error: "AI is not configured (missing ANTHROPIC_API_KEY secret)" }, 500);
+    // AI provider: Google Gemini via its OpenAI-compatible endpoint (free tier).
+    // GEMINI_API_KEY is a free key from https://aistudio.google.com (no billing).
+    // AI_BASE_URL/ASK_MODEL let you point at any OpenAI-compatible provider.
+    const apiKey = Deno.env.get("GEMINI_API_KEY") ?? Deno.env.get("AI_API_KEY");
+    if (!apiKey) return json({ error: "AI is not configured (missing GEMINI_API_KEY secret)" }, 500);
+    const baseUrl = Deno.env.get("AI_BASE_URL") ?? "https://generativelanguage.googleapis.com/v1beta/openai";
+    const model = Deno.env.get("ASK_MODEL") ?? "gemini-2.0-flash";
 
     const { question, context } = await req.json();
     if (!question || typeof question !== "string" || question.length > 2000) return json({ error: "Invalid question" }, 400);
@@ -105,20 +110,24 @@ serve(async (req) => {
       };
     }
 
+    // OpenAI-style function/tool schema (works with Gemini's OpenAI-compat API).
     const tools = [{
-      name: "query_transactions",
-      description: "Search or aggregate the user's COMPLETE transaction history (all years, thousands of rows). Use this for ANY question about spending, income, refunds, specific merchants, totals, trends, or date ranges. Call it as many times as needed. Amounts are USD; direction is given by transaction_type (expense/income/payment/transfer/refund/fee).",
-      input_schema: {
-        type: "object",
-        properties: {
-          start_date: { type: "string", description: "YYYY-MM-DD inclusive lower bound" },
-          end_date: { type: "string", description: "YYYY-MM-DD inclusive upper bound" },
-          description_contains: { type: "string", description: "case-insensitive merchant/description substring, e.g. 'amazon'" },
-          transaction_type: { type: "string", enum: ["expense", "income", "payment", "transfer", "refund", "fee"] },
-          category: { type: "string", description: "filter by category substring, e.g. 'advertising', 'shopping', 'services'" },
-          card_last_four: { type: "string", description: "filter to a card by its last 4-5 digits" },
-          group_by: { type: "string", enum: ["none", "month", "merchant", "category", "card"], description: "aggregate the matches (returns count + total per group) instead of raw rows" },
-          limit: { type: "integer", description: "max rows when group_by is none (default 50, max 500)" },
+      type: "function",
+      function: {
+        name: "query_transactions",
+        description: "Search or aggregate the user's COMPLETE transaction history (all years, thousands of rows). Use this for ANY question about spending, income, refunds, specific merchants, totals, trends, or date ranges. Call it as many times as needed. Amounts are USD; direction is given by transaction_type (expense/income/payment/transfer/refund/fee).",
+        parameters: {
+          type: "object",
+          properties: {
+            start_date: { type: "string", description: "YYYY-MM-DD inclusive lower bound" },
+            end_date: { type: "string", description: "YYYY-MM-DD inclusive upper bound" },
+            description_contains: { type: "string", description: "case-insensitive merchant/description substring, e.g. 'amazon'" },
+            transaction_type: { type: "string", enum: ["expense", "income", "payment", "transfer", "refund", "fee"] },
+            category: { type: "string", description: "filter by category substring, e.g. 'advertising', 'shopping', 'services'" },
+            card_last_four: { type: "string", description: "filter to a card by its last 4-5 digits" },
+            group_by: { type: "string", enum: ["none", "month", "merchant", "category", "card"], description: "aggregate the matches (returns count + total per group) instead of raw rows" },
+            limit: { type: "integer", description: "max rows when group_by is none (default 50, max 500)" },
+          },
         },
       },
     }];
@@ -132,42 +141,46 @@ serve(async (req) => {
       "The 'category' field generally classifies transactions (advertising, shopping, services, financial, income, transfers), so prefer category filters for category questions. description_contains accepts comma-separated terms (OR-matched) for merchant-name searches. " +
       "For TOTALS, always use the tool's returned 'totalsByType' and 'netSpend' fields (they cover ALL matched rows) — never sum the sampled 'rows' yourself, since rows are truncated to the limit.";
 
-    const model = Deno.env.get("ASK_MODEL") ?? "claude-haiku-4-5";
-    const messages: any[] = [{
-      role: "user",
-      content: `ACCOUNTS & CARDS:\n${JSON.stringify(context)}\n\nQUESTION: ${question}`,
-    }];
+    const messages: any[] = [
+      { role: "system", content: system },
+      { role: "user", content: `ACCOUNTS & CARDS:\n${JSON.stringify(context)}\n\nQUESTION: ${question}` },
+    ];
 
-    // Tool-use loop.
+    // Tool-use loop (OpenAI chat-completions protocol).
     let answer = "";
     for (let i = 0; i < 6; i++) {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
-        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({ model, max_tokens: 1500, system, tools, messages }),
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, max_tokens: 1500, messages, tools, tool_choice: "auto" }),
       });
       if (!res.ok) {
         const detail = await res.text();
-        console.error("Anthropic error", res.status, detail.slice(0, 500));
+        console.error("AI error", res.status, detail.slice(0, 500));
         if (res.status === 429) return json({ error: "Rate limited — try again shortly." }, 429);
         return json({ error: `AI request failed (${res.status})` }, 502);
       }
       const data = await res.json();
-      messages.push({ role: "assistant", content: data.content });
+      const msg = data?.choices?.[0]?.message;
+      if (!msg) return json({ error: "AI returned no message." }, 502);
+      messages.push(msg);
 
-      if (data.stop_reason === "tool_use") {
-        const results = [];
-        for (const block of data.content) {
-          if (block.type === "tool_use" && block.name === "query_transactions") {
-            const out = await runQuery(block.input || {});
-            results.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(out).slice(0, 60000) });
+      const toolCalls = msg.tool_calls ?? [];
+      if (toolCalls.length > 0) {
+        for (const tc of toolCalls) {
+          if (tc?.function?.name === "query_transactions") {
+            let args: any = {};
+            try { args = JSON.parse(tc.function.arguments || "{}"); } catch { /* bad args → empty */ }
+            const out = await runQuery(args);
+            messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(out).slice(0, 60000) });
+          } else {
+            messages.push({ role: "tool", tool_call_id: tc?.id, content: JSON.stringify({ error: "unknown tool" }) });
           }
         }
-        messages.push({ role: "user", content: results });
         continue;
       }
 
-      answer = (data.content ?? []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("\n").trim();
+      answer = (typeof msg.content === "string" ? msg.content : "").trim();
       break;
     }
 
