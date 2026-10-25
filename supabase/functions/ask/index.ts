@@ -29,7 +29,10 @@ serve(async (req) => {
     const apiKey = Deno.env.get("GEMINI_API_KEY") ?? Deno.env.get("AI_API_KEY");
     if (!apiKey) return json({ error: "AI is not configured (missing GEMINI_API_KEY secret)" }, 500);
     const baseUrl = Deno.env.get("AI_BASE_URL") ?? "https://generativelanguage.googleapis.com/v1beta/openai";
-    const model = Deno.env.get("ASK_MODEL") ?? "gemini-3.8-flash";
+    // gemini-flash-lite-latest: an always-current alias that supports tool
+    // calling and is far less prone to the free tier's 503 "high demand" spikes
+    // than the heavier gemini-3.8-flash. Override via ASK_MODEL if desired.
+    const model = Deno.env.get("ASK_MODEL") ?? "gemini-flash-lite-latest";
 
     // Call the chat endpoint, retrying transient 503/429 (the free tier gets
     // brief "high demand" spikes) with a short backoff before giving up.
