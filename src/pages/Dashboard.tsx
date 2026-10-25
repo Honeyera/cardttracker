@@ -480,6 +480,11 @@ const Dashboard = () => {
   const duePlanTotal = duePlan.reduce((s, x) => s + x.amount, 0);
   const overdueCount = duePlan.filter((x) => x.overdue).length;
 
+  const greeting = (() => {
+    const h = new Date().getHours();
+    return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  })();
+
   // Forecast: lowest projected balance point over the horizon.
   const lowestPoint = useMemo(() => {
     if (forecast.length === 0) return null;
@@ -527,9 +532,9 @@ const Dashboard = () => {
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-2">
-            <LayoutDashboard className="w-5 h-5 text-primary" />
-            <h2 className="text-lg font-semibold">Financial Dashboard</h2>
+          <div>
+            <h2 className="text-lg font-semibold">{greeting}</h2>
+            <p className="text-xs text-muted-foreground">Here's your money at a glance</p>
           </div>
           <div className="flex items-center gap-3">
             {lastSyncedAt && (
