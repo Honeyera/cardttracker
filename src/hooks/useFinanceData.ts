@@ -12,7 +12,8 @@ export type AccountType = 'checking' | 'savings' | 'credit_card' | string;
 
 export interface FinanceAccount {
   id: string;
-  name: string;
+  name: string; // display name: user override (display_name) if set, else the synced name
+  hasNameOverride: boolean; // true when display_name is set, so we can offer "reset to automatic"
   institution: string | null;
   accountType: AccountType;
   accountSubtype: string | null;
@@ -154,7 +155,10 @@ export function useFinanceData() {
       if (error) throw error;
       return (data ?? []).map((a: any) => ({
         id: a.id,
-        name: ACCOUNT_NAME_OVERRIDES[last4(a.last_four)] ?? a.name,
+        // Prefer the user's explicit display_name (sync never touches it), then
+        // the hardcoded override map, then the synced name.
+        name: (a.display_name ?? '').trim() || ACCOUNT_NAME_OVERRIDES[last4(a.last_four)] || a.name,
+        hasNameOverride: (a.display_name ?? '').trim().length > 0,
         institution: a.institution_name ?? null,
         accountType: a.account_type,
         accountSubtype: a.account_subtype ?? null,

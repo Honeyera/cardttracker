@@ -205,6 +205,14 @@ const Dashboard = () => {
     await (supabase as any).from('credit_cards').update({ display_name: value }).eq('id', id);
     refreshFinance();
   };
+
+  // Rename a bank account — same sync-safe display_name override as cards.
+  const setAccountName = async (id: string, name: string | null) => {
+    const value = name == null ? null : name.trim();
+    if (value === '') return;
+    await (supabase as any).from('accounts').update({ display_name: value }).eq('id', id);
+    refreshFinance();
+  };
   const { accounts, transactions, cards, alerts, forecast, snapshots, availablePoints, loading, lastSyncedAt } = useFinanceData();
   const [company, setCompany] = useState('all');
   const [selectedCard, setSelectedCard] = useState<FinanceCard | null>(null);
@@ -993,6 +1001,7 @@ const Dashboard = () => {
 
       <AccountDetailDialog
         account={selectedAccount}
+        onNameChange={setAccountName}
         transactions={selectedAccount ? transactions.filter((t) => t.accountId === selectedAccount.id) : []}
         history={selectedAccount ? snapshots.filter((s) => s.accountId === selectedAccount.id) : []}
         onClose={() => setSelectedAccount(null)}
@@ -1122,23 +1131,53 @@ function Sparkline({ data }: { data: BalanceSnapshot[] }) {
   );
 }
 
-function AccountDetailDialog({ account, transactions, history, onClose }: {
-  account: FinanceAccount | null; transactions: FinanceTransaction[]; history: BalanceSnapshot[]; onClose: () => void;
+function AccountDetailDialog({ account, transactions, history, onNameChange, onClose }: {
+  account: FinanceAccount | null; transactions: FinanceTransaction[]; history: BalanceSnapshot[];
+  onNameChange?: (id: string, name: string | null) => void | Promise<void>;
+  onClose: () => void;
 }) {
   const open = account != null;
   const chartData = history.map((s) => ({ ...s, label: format(parseISO(s.date), 'MMM d') }));
+  const [pendingName, setPendingName] = useState<string>('');
+  useEffect(() => { setPendingName(account?.name ?? ''); }, [account?.id, account?.name]);
+  const trimmedName = pendingName.trim();
+  const nameDirty = account != null && trimmedName.length > 0 && trimmedName !== account.name;
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-4xl w-[95vw] max-h-[85vh] overflow-hidden flex flex-col">
         {account && (
           <>
             <DialogHeader className="shrink-0">
-              <DialogTitle>
-                {account.name}{' '}
-                <span className="text-muted-foreground font-normal">
-                  {account.institution}{account.lastFour ? ` •••• ${account.lastFour}` : ''}
-                </span>
-              </DialogTitle>
+              {onNameChange ? (
+                <div className="flex items-center gap-2 flex-wrap pr-6">
+                  <Input
+                    value={pendingName}
+                    onChange={(e) => setPendingName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && nameDirty) onNameChange(account.id, trimmedName); }}
+                    aria-label="Account name"
+                    className="h-8 w-56 font-semibold"
+                  />
+                  <span className="text-muted-foreground">{account.institution}{account.lastFour ? ` •••• ${account.lastFour}` : ''}</span>
+                  <Button size="sm" className="h-8 text-xs" disabled={!nameDirty}
+                    onClick={() => onNameChange(account.id, trimmedName)}>
+                    Save name
+                  </Button>
+                  {account.hasNameOverride && (
+                    <Button variant="ghost" size="sm" className="h-8 text-xs"
+                      onClick={() => onNameChange(account.id, null)}>
+                      Reset to automatic
+                    </Button>
+                  )}
+                  <DialogTitle className="sr-only">{account.name} {account.lastFour ? `•••• ${account.lastFour}` : ''}</DialogTitle>
+                </div>
+              ) : (
+                <DialogTitle>
+                  {account.name}{' '}
+                  <span className="text-muted-foreground font-normal">
+                    {account.institution}{account.lastFour ? ` •••• ${account.lastFour}` : ''}
+                  </span>
+                </DialogTitle>
+              )}
             </DialogHeader>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4 text-sm shrink-0">
               <Field label="Current Balance">{fmtMoney(account.currentBalance, { cents: true })}</Field>
