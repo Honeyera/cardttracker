@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
+import { useTheme } from 'next-themes';
 import { format, parseISO, differenceInCalendarDays } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFinanceData, FinanceAccount, FinanceCard, FinanceTransaction, FinanceAlert, ForecastPoint, BalanceSnapshot } from '@/hooks/useFinanceData';
@@ -22,6 +23,7 @@ import {
   Wallet, LayoutDashboard, CreditCard as CardIcon, Trophy, Loader2, Building2,
   ArrowDownRight, ArrowUpRight, Landmark, TrendingUp, TrendingDown, AlertTriangle,
   CheckCircle2, CalendarClock, RefreshCw, Bell, ChevronRight, Percent, Megaphone, X, Repeat,
+  Sun, Moon,
 } from 'lucide-react';
 
 const fmtMoney = (n: number, opts: { cents?: boolean } = {}) =>
@@ -184,6 +186,8 @@ function compareCards(a: FinanceCard, b: FinanceCard, sort: CardSort, paidFor: (
 const Dashboard = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const queryClient = useQueryClient();
   const refreshFinance = () => queryClient.invalidateQueries({ queryKey: ['finance'] });
   // Persist a per-card custom tile color (hex), or null to reset to automatic.
@@ -543,6 +547,11 @@ const Dashboard = () => {
             </Button>
             <Button size="sm" variant="outline" asChild>
               <Link to="/points"><Trophy className="w-4 h-4 mr-1" />Points</Link>
+            </Button>
+            <Button size="sm" variant="outline" className="w-9 px-0" aria-label="Toggle dark mode"
+              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              onClick={() => setTheme(isDark ? 'light' : 'dark')}>
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </Button>
             <UserMenu userEmail={user?.email || ''} onSignOut={async () => { await signOut(); navigate('/auth'); }} />
           </div>
