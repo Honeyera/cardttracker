@@ -481,9 +481,12 @@ const Dashboard = () => {
   // (overdue / due soon / unpaid statement), with the amount owed and timing.
   // Same source set as the old due-reminder rows, now shown as the headline.
   const duePlan = useMemo(() => attentionCards.map((c) => {
-    const amount = (c.lastStatementBalance && c.lastStatementBalance > 0.005)
-      ? c.lastStatementBalance
-      : (c.currentBalance || c.minimumPayment || c.totalBalance || 0);
+    const stmt = (c.lastStatementBalance && c.lastStatementBalance > 0.005) ? c.lastStatementBalance : 0;
+    // Bill the uncovered remainder of the statement (reflects payments already
+    // made), mirroring the card tile — falls back to current/min balance when
+    // there's no statement figure.
+    const paid = stmt > 0 ? Math.min(stmt, Math.max(paidFor(c.id), Math.max(0, stmt - c.currentBalance))) : 0;
+    const amount = stmt > 0 ? Math.max(0, stmt - paid) : (c.currentBalance || c.minimumPayment || c.totalBalance || 0);
     return { card: c, amount, due: resolveDue(c), overdue: c.isOverdue };
   }), [attentionCards]);
   const duePlanTotal = duePlan.reduce((s, x) => s + x.amount, 0);
@@ -1310,8 +1313,20 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
   const stmtBal = card.lastStatementBalance ?? 0;
   const notRequired = /not required|no payment|don'?t have a payment|paid in full|nothing due/i.test(card.paymentStatus ?? '');
   const forceDue = unpaidStatementDueWithin(card, paidTowardStatement, 15);
+  // How much of the statement is already covered, so we can show progress and
+  // bill only the remainder. Precise matching needs the statement close date;
+  // when Plaid omits it, fall back to (statement − current balance) so a payment
+  // still shows up. Clamped to [0, statement].
+  const paidOnStmt = stmtBal > 0.005
+    ? Math.min(stmtBal, Math.max(paidTowardStatement, Math.max(0, stmtBal - card.currentBalance)))
+    : 0;
+  const remainingOnStmt = Math.max(0, Math.round((stmtBal - paidOnStmt) * 100) / 100);
+  const partiallyPaid = paidOnStmt > 0.005 && remainingOnStmt > 0.005;
+  // Bill the uncovered remainder (falls back to payAmount when no statement).
+  const dueAmount = stmtBal > 0.005 ? remainingOnStmt : payAmount;
+  const paidSubtext = partiallyPaid ? `Paid ${fmtMoney(paidOnStmt)} of ${fmtMoney(stmtBal)} statement` : undefined;
   if (card.isOverdue) {
-    strip = { tone: 'danger', icon: AlertTriangle, text: `Overdue — pay ${fmtMoney(payAmount, { cents: true })} now` };
+    strip = { tone: 'danger', icon: AlertTriangle, text: `Overdue — pay ${fmtMoney(dueAmount, { cents: true })} now`, subtext: paidSubtext };
   } else if (forceDue) {
     // Statement unpaid and due within 7 days — surface it even if the issuer
     // reports "not required" (stale / autopay).
@@ -1319,7 +1334,8 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
     strip = {
       tone: forceDue.days <= 3 ? 'danger' : 'warning',
       icon: forceDue.days <= 3 ? AlertTriangle : CalendarClock,
-      text: `Pay ${fmtMoney(payAmount, { cents: true })} by ${format(forceDue.date, 'MMM d')} · ${when}`,
+      text: `Pay ${fmtMoney(dueAmount, { cents: true })} by ${format(forceDue.date, 'MMM d')} · ${when}`,
+      subtext: paidSubtext,
     };
   } else if (settled) {
     const statementPaid = stmtBal > 0.005 && (paidTowardStatement + 0.005) >= stmtBal;
@@ -1345,7 +1361,8 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
     strip = {
       tone: due.days <= 3 ? 'danger' : due.days <= 7 ? 'warning' : 'muted',
       icon: due.days <= 3 ? AlertTriangle : CalendarClock,
-      text: `Pay ${fmtMoney(payAmount, { cents: true })} by ${format(due.date, 'MMM d')} · ${when}`,
+      text: `Pay ${fmtMoney(dueAmount, { cents: true })} by ${format(due.date, 'MMM d')} · ${when}`,
+      subtext: paidSubtext,
     };
   } else {
     strip = { tone: 'muted', icon: CalendarClock, text: 'No due date on file' };
@@ -1410,11 +1427,16 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
         <div>
           {!settled && stmtBal > 0.005 ? (
             <>
-              {/* Lead with what must actually be paid (the statement balance),
-                  not the full card balance; show the total underneath. */}
-              <p className="text-xs text-muted-foreground">Statement balance due</p>
-              <p className="text-2xl font-bold text-card-foreground">{fmtMoney(stmtBal, { cents: true })}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Total balance {fmtMoney(card.currentBalance, { cents: true })}</p>
+              {/* Lead with what must actually be paid. When the statement is
+                  partly paid, that's the remaining amount, with the paid portion
+                  shown underneath; otherwise the full statement balance. */}
+              <p className="text-xs text-muted-foreground">{partiallyPaid ? 'Statement balance remaining' : 'Statement balance due'}</p>
+              <p className="text-2xl font-bold text-card-foreground">{fmtMoney(partiallyPaid ? remainingOnStmt : stmtBal, { cents: true })}</p>
+              {partiallyPaid ? (
+                <p className="text-xs text-muted-foreground mt-0.5">Paid {fmtMoney(paidOnStmt)} of {fmtMoney(stmtBal)} · total balance {fmtMoney(card.currentBalance)}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-0.5">Total balance {fmtMoney(card.currentBalance, { cents: true })}</p>
+              )}
             </>
           ) : (
             <>
