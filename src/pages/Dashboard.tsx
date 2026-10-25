@@ -485,6 +485,25 @@ const Dashboard = () => {
     return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
   })();
 
+  // Available-cash trend for the hero sparkline. balance_snapshots are depository
+  // only, so this is total available cash per day (summed across bank accounts),
+  // not net position (card balances aren't snapshotted). Last 30 days.
+  const cashTrend = useMemo(() => {
+    const depIds = new Set(depository.map((a) => a.id));
+    const byDate = new Map<string, number>();
+    for (const s of snapshots) {
+      if (!depIds.has(s.accountId)) continue;
+      byDate.set(s.date, (byDate.get(s.date) ?? 0) + (s.availableBalance || 0));
+    }
+    return [...byDate.entries()]
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+      .slice(-30)
+      .map(([date, total]) => ({ date, total }));
+  }, [snapshots, depository]);
+  const cashDelta = cashTrend.length >= 2
+    ? cashTrend[cashTrend.length - 1].total - cashTrend[0].total
+    : null;
+
   // Forecast: lowest projected balance point over the horizon.
   const lowestPoint = useMemo(() => {
     if (forecast.length === 0) return null;
@@ -660,6 +679,22 @@ const Dashboard = () => {
                       <span className="font-semibold tabular-nums">{fmtMoney(creditAvailable)}</span>
                     </div>
                   </div>
+                  {cashTrend.length >= 2 && (
+                    <div className="mt-auto pt-4">
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-muted-foreground">Available cash · last {cashTrend.length} days</span>
+                        {cashDelta != null && (
+                          <span className={cn('font-semibold flex items-center gap-1',
+                            cashDelta >= 0 ? 'text-success' : 'text-destructive')}>
+                            {cashDelta >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                            {cashDelta >= 0 ? '+' : '−'}{fmtMoney(Math.abs(cashDelta))}
+                          </span>
+                        )}
+                      </div>
+                      <HeroSparkline values={cashTrend.map((p) => p.total)}
+                        ariaLabel={`Available cash trend over the last ${cashTrend.length} days, currently ${fmtMoney(availableCash)}`} />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1651,6 +1686,36 @@ function CardDetailDialog({ card, adSpend, transactions, onColorChange, onNameCh
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Compact area sparkline for the hero. Scales to the series' own min/max, draws a
+// 2px line + soft gradient fill + an endpoint dot. Non-interactive by design (a
+// small summary spark); the exact history lives in the per-account dialog.
+function HeroSparkline({ values, ariaLabel }: { values: number[]; ariaLabel?: string }) {
+  if (values.length < 2) return null;
+  const W = 240, H = 48, pad = 4;
+  const min = Math.min(...values), max = Math.max(...values);
+  const span = max - min || 1;
+  const x = (i: number) => (i / (values.length - 1)) * W;
+  const y = (v: number) => H - pad - ((v - min) / span) * (H - pad * 2);
+  const line = values.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const area = `${line} L${W},${H} L0,${H} Z`;
+  const lastX = x(values.length - 1), lastY = y(values[values.length - 1]);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none"
+      role="img" aria-label={ariaLabel} className="text-primary overflow-visible">
+      <defs>
+        <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.22" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill="url(#sparkFill)" />
+      <path d={line} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+        strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      <circle cx={lastX} cy={lastY} r="3" fill="currentColor" vectorEffect="non-scaling-stroke" />
+    </svg>
   );
 }
 
