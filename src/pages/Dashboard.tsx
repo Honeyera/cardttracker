@@ -349,6 +349,11 @@ const Dashboard = () => {
   // Recurring charges — detected from the FULL history (not the activity window).
   const recurring = useMemo(() => detectRecurring(brandTxns), [brandTxns]);
   const recurringMonthly = recurring.reduce((s, r) => s + r.monthlyEquivalent, 0);
+  // Show most-recently-charged first ("latest on top"), by last charge date.
+  const recurringSorted = useMemo(
+    () => [...recurring].sort((a, b) => (a.lastDate < b.lastDate ? 1 : a.lastDate > b.lastDate ? -1 : 0)),
+    [recurring],
+  );
 
   const cardName = (id: string | null) =>
     cards.find((c) => c.id === id)?.name ?? null;
@@ -941,7 +946,7 @@ const Dashboard = () => {
                   </span>
                 </div>
                 <div className="mt-3 space-y-1.5">
-                  {recurring.slice(0, 10).map((r) => {
+                  {recurringSorted.slice(0, 10).map((r) => {
                     const card = r.creditCardId ? cards.find((c) => c.id === r.creditCardId) : null;
                     const acct = r.accountId ? accounts.find((a) => a.id === r.accountId) : null;
                     const src = card ? `${card.name}${card.lastFour ? ` ••${card.lastFour}` : ''}`
