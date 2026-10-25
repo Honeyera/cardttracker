@@ -29,7 +29,26 @@ serve(async (req) => {
     const apiKey = Deno.env.get("GEMINI_API_KEY") ?? Deno.env.get("AI_API_KEY");
     if (!apiKey) return json({ error: "AI is not configured (missing GEMINI_API_KEY secret)" }, 500);
     const baseUrl = Deno.env.get("AI_BASE_URL") ?? "https://generativelanguage.googleapis.com/v1beta/openai";
-    const model = Deno.env.get("ASK_MODEL") ?? "gemini-2.0-flash";
+    const model = Deno.env.get("ASK_MODEL") ?? "gemini-3.8-flash";
+
+    // Call the chat endpoint, retrying transient 503/429 (the free tier gets
+    // brief "high demand" spikes) with a short backoff before giving up.
+    const callAI = async (payload: unknown): Promise<Response> => {
+      let res!: Response;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        res = await fetch(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if ((res.status === 503 || res.status === 429) && attempt < 3) {
+          await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+          continue;
+        }
+        break;
+      }
+      return res;
+    };
 
     const { question, context } = await req.json();
     if (!question || typeof question !== "string" || question.length > 2000) return json({ error: "Invalid question" }, 400);
@@ -149,14 +168,11 @@ serve(async (req) => {
     // Tool-use loop (OpenAI chat-completions protocol).
     let answer = "";
     for (let i = 0; i < 6; i++) {
-      const res = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model, max_tokens: 1500, messages, tools, tool_choice: "auto" }),
-      });
+      const res = await callAI({ model, max_tokens: 1500, messages, tools, tool_choice: "auto" });
       if (!res.ok) {
         const detail = await res.text();
         console.error("AI error", res.status, detail.slice(0, 500));
+        if (res.status === 503) return json({ error: "The AI model is busy right now — try again in a moment." }, 503);
         if (res.status === 429) return json({ error: "Rate limited — try again shortly." }, 429);
         return json({ error: `AI request failed (${res.status})` }, 502);
       }
