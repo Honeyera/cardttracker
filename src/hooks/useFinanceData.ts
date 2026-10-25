@@ -46,7 +46,8 @@ export interface FinanceTransaction {
 // that the basic useCreditCards() hook does not expose.
 export interface FinanceCard {
   id: string;
-  name: string;
+  name: string; // display name: user override (display_name) if set, else the synced name
+  hasNameOverride: boolean; // true when display_name is set, so we can offer "reset to automatic"
   companyName: string | null;
   ownerName: string | null;
   lastFour: string | null;
@@ -213,7 +214,10 @@ export function useFinanceData() {
       if (error) throw error;
       return (data ?? []).map((c: any) => ({
         id: c.id,
-        name: c.name,
+        // Prefer the user's explicit display_name; Plaid sync keeps overwriting
+        // c.name, but the override is never touched by sync.
+        name: (c.display_name ?? '').trim() || c.name,
+        hasNameOverride: (c.display_name ?? '').trim().length > 0,
         companyName: CARD_COMPANY_OVERRIDES[last4(c.last_four)] ?? c.company_name ?? null,
         // c.owner_name is a Plaid placeholder (the institution name), so prefer
         // our explicit map and otherwise show nothing rather than the bank name.

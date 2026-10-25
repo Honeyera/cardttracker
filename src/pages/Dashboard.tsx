@@ -14,6 +14,7 @@ import { ConnectBank } from '@/components/ConnectBank';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceDot } from 'recharts';
@@ -188,6 +189,16 @@ const Dashboard = () => {
   // Persist a per-card custom tile color (hex), or null to reset to automatic.
   const setCardColor = async (id: string, color: string | null) => {
     await (supabase as any).from('credit_cards').update({ tile_color: color }).eq('id', id);
+    refreshFinance();
+  };
+
+  // Rename a card. Writes a display_name override that Plaid sync never touches
+  // (sync keeps rewriting `name`), so the rename sticks. Passing null clears the
+  // override and falls back to the synced name.
+  const setCardName = async (id: string, name: string | null) => {
+    const value = name == null ? null : name.trim();
+    if (value === '') return; // ignore empty — use "Reset to automatic" to clear
+    await (supabase as any).from('credit_cards').update({ display_name: value }).eq('id', id);
     refreshFinance();
   };
   const { accounts, transactions, cards, alerts, forecast, snapshots, availablePoints, loading, lastSyncedAt } = useFinanceData();
@@ -840,6 +851,7 @@ const Dashboard = () => {
         adSpend={selectedCard ? adSpendByCard.get(selectedCard.id) : undefined}
         transactions={selectedCard ? transactions.filter((t) => t.creditCardId === selectedCard.id) : []}
         onColorChange={setCardColor}
+        onNameChange={setCardName}
         onClose={() => setSelectedCard(null)}
       />
 
@@ -1445,22 +1457,53 @@ function TransactionsPanel({ transactions, resetKey, showAdsFilter }: {
   );
 }
 
-function CardDetailDialog({ card, adSpend, transactions, onColorChange, onClose }: {
+function CardDetailDialog({ card, adSpend, transactions, onColorChange, onNameChange, onClose }: {
   card: FinanceCard | null; adSpend?: AdSpendStatus; transactions: FinanceTransaction[];
-  onColorChange?: (id: string, color: string | null) => void | Promise<void>; onClose: () => void;
+  onColorChange?: (id: string, color: string | null) => void | Promise<void>;
+  onNameChange?: (id: string, name: string | null) => void | Promise<void>;
+  onClose: () => void;
 }) {
   const open = card != null;
   const due = card ? resolveDue(card) : null;
   const [pendingColor, setPendingColor] = useState<string>('#1e3a8a');
   useEffect(() => { setPendingColor(card?.tileColor ?? '#1e3a8a'); }, [card?.id, card?.tileColor]);
   const colorDirty = card != null && (card.tileColor ?? null) !== pendingColor;
+  const [pendingName, setPendingName] = useState<string>('');
+  useEffect(() => { setPendingName(card?.name ?? ''); }, [card?.id, card?.name]);
+  const trimmedName = pendingName.trim();
+  const nameDirty = card != null && trimmedName.length > 0 && trimmedName !== card.name;
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-4xl w-[95vw] max-h-[85vh] overflow-hidden flex flex-col">
         {card && (
           <>
             <DialogHeader className="shrink-0">
-              <DialogTitle>{card.name} <span className="text-muted-foreground font-normal">•••• {card.lastFour}</span></DialogTitle>
+              {onNameChange ? (
+                <div className="flex items-center gap-2 flex-wrap pr-6">
+                  <Input
+                    value={pendingName}
+                    onChange={(e) => setPendingName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && nameDirty) onNameChange(card.id, trimmedName); }}
+                    aria-label="Card name"
+                    className="h-8 w-56 font-semibold"
+                  />
+                  <span className="text-muted-foreground">•••• {card.lastFour}</span>
+                  <Button size="sm" className="h-8 text-xs" disabled={!nameDirty}
+                    onClick={() => onNameChange(card.id, trimmedName)}>
+                    Save name
+                  </Button>
+                  {card.hasNameOverride && (
+                    <Button variant="ghost" size="sm" className="h-8 text-xs"
+                      onClick={() => onNameChange(card.id, null)}>
+                      Reset to automatic
+                    </Button>
+                  )}
+                  {/* Keep a title for accessibility/screen readers */}
+                  <DialogTitle className="sr-only">{card.name} •••• {card.lastFour}</DialogTitle>
+                </div>
+              ) : (
+                <DialogTitle>{card.name} <span className="text-muted-foreground font-normal">•••• {card.lastFour}</span></DialogTitle>
+              )}
             </DialogHeader>
             {onColorChange && (
               <div className="flex items-center gap-3 shrink-0 -mt-1 flex-wrap">
