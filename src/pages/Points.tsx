@@ -651,10 +651,9 @@ export default function Points() {
                 <h2 className="text-lg font-semibold text-foreground">Available Points</h2>
                 <span className="text-xs text-muted-foreground">(click a value to edit)</span>
               </div>
-              <Button size="sm" variant="outline" onClick={() => setUploadPointsOpen(true)}>
-                <Upload className="w-4 h-4 mr-1" />
-                Upload Screenshot
-              </Button>
+              {/* Upload-Screenshot button hidden on the personal instance: the
+                  analyze-points-screenshot AI edge function isn't deployed.
+                  Re-add this button to restore. */}
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {cards.map((card) => {

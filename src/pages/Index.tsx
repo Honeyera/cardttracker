@@ -169,14 +169,9 @@ const Index = () => {
                 Points
               </Link>
             </Button>
-            <Button onClick={() => setUploadDialogOpen(true)} size="sm" variant="outline">
-              <Upload className="w-4 h-4 mr-1" />
-              Screenshot
-            </Button>
-            <Button onClick={() => setPasteDialogOpen(true)} size="sm" variant="outline">
-              <ClipboardPaste className="w-4 h-4 mr-1" />
-              Paste Text
-            </Button>
+            {/* Screenshot import & Paste-Text buttons hidden on the personal
+                instance: their AI edge functions (analyze-screenshot, parse-text)
+                aren't deployed. Re-add these buttons to restore. */}
             <Button onClick={() => setDialogOpen(true)} size="sm">
               <Plus className="w-4 h-4 mr-1" />
               Add Card
@@ -224,8 +219,8 @@ const Index = () => {
         {/* Dashboard Stats */}
         <DashboardStats cards={companyFilteredCards} />
 
-        {/* Smart Charge Advisor */}
-        {companyFilteredCards.length > 0 && <ChargeRecommendation cards={companyFilteredCards} />}
+        {/* Smart Charge Advisor hidden on the personal instance: the recommend-card
+            AI edge function isn't deployed. Re-add to restore. */}
 
         {/* Cards Section with Tabs */}
         <Tabs defaultValue="cards" className="w-full">
