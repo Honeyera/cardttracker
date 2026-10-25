@@ -40,6 +40,7 @@ export interface FinanceTransaction {
   category: string | null;
   isPending: boolean;
   isRecurring: boolean;
+  createdAt: string | null; // when the row was synced into our DB (not the posting date)
 }
 
 // A credit card enriched with the finance-sync fields (statement/payment info)
@@ -199,6 +200,7 @@ export function useFinanceData() {
         category: t.category ?? null,
         isPending: t.is_pending ?? false,
         isRecurring: t.is_recurring ?? false,
+        createdAt: t.created_at ?? null,
       }));
     },
   });

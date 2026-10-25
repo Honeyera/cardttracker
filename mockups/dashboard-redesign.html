@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cards — redesign mockup</title>
+<style>
+  :root {
+    color-scheme: light;
+    --plane:        #f4f5f3;
+    --surface:      #ffffff;
+    --surface-2:    #fbfbfa;
+    --ink:          #0b0b0b;
+    --ink-2:        #52514e;
+    --muted:        #898781;
+    --line:         rgba(11,11,11,0.09);
+    --line-2:       rgba(11,11,11,0.06);
+    --brand:        #2a78d6;
+    --brand-weak:   #e7f0fc;
+    --good:         #0ca30c;
+    --good-ink:     #006300;
+    --good-weak:    #e4f5e4;
+    --warning:      #fab219;
+    --warning-ink:  #8a5d00;
+    --warning-weak: #fdf2d8;
+    --critical:     #d03b3b;
+    --critical-ink: #a51f1f;
+    --critical-weak:#fbe6e6;
+    --radius:       18px;
+    --shadow:       0 1px 2px rgba(11,11,11,.04), 0 6px 20px rgba(11,11,11,.05);
+  }
+  html[data-theme="dark"] {
+    color-scheme: dark;
+    --plane:        #0d0d0d;
+    --surface:      #1a1a19;
+    --surface-2:    #201f1e;
+    --ink:          #f0efec;
+    --ink-2:        #c3c2b7;
+    --muted:        #898781;
+    --line:         rgba(255,255,255,0.10);
+    --line-2:       rgba(255,255,255,0.06);
+    --brand:        #3987e5;
+    --brand-weak:   #16263b;
+    --good:         #0ca30c;
+    --good-ink:     #5cd65c;
+    --good-weak:    #16281a;
+    --warning:      #fab219;
+    --warning-ink:  #f0c257;
+    --warning-weak: #2c2412;
+    --critical:     #e66767;
+    --critical-ink: #f09a9a;
+    --critical-weak:#2e1818;
+    --shadow:       0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--plane); color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 24px 64px; }
+  a { color: inherit; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* ── Top bar ─────────────────────────────── */
+  header.bar { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; }
+  .logo { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--brand), #184f95); color: #fff; font-weight: 700; font-size: 17px; }
+  .brandname { font-weight: 700; font-size: 17px; letter-spacing: -.01em; }
+  .brandsub { color: var(--muted); font-size: 12px; margin-top: -2px; }
+  .bar .spacer { flex: 1; }
+  .btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+    height: 38px; padding: 0 15px; border-radius: 11px; font-weight: 600; font-size: 13px;
+    display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+  .btn:hover { background: var(--surface-2); }
+  .btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .btn.icon { width: 38px; padding: 0; justify-content: center; }
+  .avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--brand-weak); color: var(--brand);
+    display: grid; place-items: center; font-weight: 700; }
+
+  /* ── Hero ────────────────────────────────── */
+  .hero { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .pad { padding: 20px; }
+  .eyebrow { text-transform: uppercase; letter-spacing: .08em; font-size: 11px; font-weight: 700; color: var(--muted); }
+  .hero-due .amount { font-size: 42px; font-weight: 700; letter-spacing: -.02em; margin: 6px 0 2px; }
+  .hero-due .amount small { font-size: 15px; font-weight: 600; color: var(--ink-2); }
+  .duelist { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .duerow { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border: 1px solid var(--line-2);
+    border-radius: 13px; background: var(--surface-2); }
+  .swatch { width: 10px; height: 34px; border-radius: 6px; flex: none; }
+  .duerow .nm { font-weight: 600; }
+  .duerow .meta { color: var(--muted); font-size: 12px; }
+  .duerow .amt { margin-left: auto; font-weight: 700; }
+  .pill { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px; }
+  .pill.warn { background: var(--warning-weak); color: var(--warning-ink); }
+  .pill.crit { background: var(--critical-weak); color: var(--critical-ink); }
+  .pill.good { background: var(--good-weak); color: var(--good-ink); }
+  .pill.new  { background: var(--good); color: #fff; }
+  .pill.pend { background: var(--warning-weak); color: var(--warning-ink); border: 1px solid var(--warning); }
+
+  .hero-cash { display: flex; flex-direction: column; }
+  .hero-cash .amount { font-size: 34px; font-weight: 700; letter-spacing: -.02em; margin: 4px 0; }
+  .trend { color: var(--good-ink); font-weight: 600; font-size: 12px; }
+  .spark { margin-top: auto; }
+
+  /* ── KPI strip ───────────────────────────── */
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; }
+  .kpi .label { color: var(--muted); font-size: 12px; font-weight: 600; }
+  .kpi .val { font-size: 24px; font-weight: 700; letter-spacing: -.02em; margin-top: 4px; }
+  .kpi .sub { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+  .kpi .ico { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; float: right; }
+
+  /* ── Section headings ────────────────────── */
+  .sec-h { display: flex; align-items: center; gap: 8px; margin: 26px 2px 12px; }
+  .sec-h h2 { font-size: 15px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
+  .sec-h .count { color: var(--muted); font-size: 13px; font-weight: 600; }
+  .sec-h .link { margin-left: auto; color: var(--brand); font-weight: 600; font-size: 13px; cursor: pointer; }
+
+  /* ── Card tiles ──────────────────────────── */
+  .cards-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .cctile { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); background: var(--surface); }
+  .cctile .top { padding: 14px 16px; color: #fff; display: flex; justify-content: space-between; align-items: flex-start; }
+  .cctile .top .nm { font-weight: 700; }
+  .cctile .top .m { font-size: 12px; opacity: .85; }
+  .cctile .body { padding: 14px 16px; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; }
+  .row + .row { margin-top: 10px; }
+  .k { color: var(--muted); font-size: 12px; font-weight: 600; }
+  .v { font-weight: 700; }
+  .util { height: 7px; border-radius: 999px; background: var(--line); overflow: hidden; margin-top: 12px; }
+  .util > span { display: block; height: 100%; border-radius: 999px; }
+  .util-meta { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: var(--muted); }
+  .due-chip { margin-top: 12px; display: inline-flex; }
+
+  /* ── Activity ────────────────────────────── */
+  .two { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; align-items: start; }
+  .txn { display: flex; align-items: center; gap: 12px; padding: 9px 8px; border-radius: 11px; }
+  .txn:hover { background: var(--surface-2); }
+  .txn + .txn { border-top: 1px solid var(--line-2); }
+  .tx-ico { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; flex: none; font-size: 15px; }
+  .tx-out { background: var(--warning-weak); color: var(--warning-ink); }
+  .tx-in  { background: var(--good-weak); color: var(--good-ink); }
+  .tx-nm { font-weight: 600; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .tx-meta { color: var(--muted); font-size: 12px; }
+  .tx-amt { margin-left: auto; font-weight: 700; }
+  .tx-amt.in { color: var(--good-ink); }
+  .scroll { max-height: 360px; overflow-y: auto; }
+  .recur { display: flex; align-items: center; gap: 10px; padding: 9px 8px; }
+  .recur + .recur { border-top: 1px solid var(--line-2); }
+  .recur .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--brand); flex: none; }
+  .hint { margin: 28px 2px 0; color: var(--muted); font-size: 12px; text-align: center; }
+  @media (max-width: 880px) {
+    .hero, .kpis, .cards-grid, .two { grid-template-columns: 1fr; }
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Top bar -->
+  <header class="bar">
+    <div class="logo">C</div>
+    <div>
+      <div class="brandname">Cards</div>
+      <div class="brandsub">Good afternoon, Thomas · last synced 4 min ago</div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn"><span>↻</span> Sync now</button>
+    <button class="btn primary"><span>💬</span> Ask</button>
+    <button class="btn icon" id="themeBtn" title="Toggle theme">🌙</button>
+    <div class="avatar">T</div>
+  </header>
+
+  <!-- Hero: what needs attention + cash position -->
+  <section class="hero">
+    <div class="card pad hero-due">
+      <div class="eyebrow">Due this week</div>
+      <div class="amount tnum">$2,540<small> across 2 cards</small></div>
+      <div style="color:var(--ink-2)">You're on track — nothing overdue. Pay before Thu to avoid interest.</div>
+      <div class="duelist">
+        <div class="duerow">
+          <span class="swatch" style="background:#1e3a8a"></span>
+          <div>
+            <div class="nm">VOWIDEAS Chase Card</div>
+            <div class="meta">•••• 8213 · statement balance</div>
+          </div>
+          <div style="margin-left:auto; text-align:right">
+            <div class="amt tnum">$1,890</div>
+            <span class="pill warn">⏱ due in 2 days</span>
+          </div>
+          <button class="btn primary" style="height:32px">Pay</button>
+        </div>
+        <div class="duerow">
+          <span class="swatch" style="background:#0f766e"></span>
+          <div>
+            <div class="nm">Amex Platinum</div>
+            <div class="meta">•••• 1004 · statement balance</div>
+          </div>
+          <div style="margin-left:auto; text-align:right">
+            <div class="amt tnum">$650</div>
+            <span class="pill good">✓ 5 days</span>
+          </div>
+          <button class="btn primary" style="height:32px">Pay</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card pad hero-cash">
+      <div class="eyebrow">Net cash position</div>
+      <div class="amount tnum">$18,240</div>
+      <div class="trend">▲ $1,120 this month</div>
+      <div class="spark">
+        <svg viewBox="0 0 320 90" width="100%" height="90" preserveAspectRatio="none" aria-label="Net cash trend, last 6 months">
+          <defs>
+            <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--brand)" stop-opacity="0.28"/>
+              <stop offset="100%" stop-color="var(--brand)" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path d="M0,70 L53,62 L106,66 L160,44 L213,40 L266,30 L320,20 L320,90 L0,90 Z" fill="url(#g)"/>
+          <path d="M0,70 L53,62 L106,66 L160,44 L213,40 L266,30 L320,20" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="320" cy="20" r="4" fill="var(--brand)" stroke="var(--surface)" stroke-width="2"/>
+        </svg>
+        <div class="util-meta"><span>May</span><span>Oct</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- KPI strip -->
+  <section class="kpis">
+    <div class="card pad kpi">
+      <div class="ico" style="background:var(--good-weak);color:var(--good-ink)">💵</div>
+      <div class="label">Available Cash</div>
+      <div class="val tnum">$24,980</div>
+      <div class="sub">across 3 accounts</div>
+    </div>
+    <div class="card pad kpi">
+      <div class="ico" style="background:var(--warning-weak);color:var(--warning-ink)">💳</div>
+      <div class="label">Card Debt</div>
+      <div class="val tnum">$6,740</div>
+      <div class="sub">statement due: $2,540</div>
+    </div>
+    <div class="card pad kpi">
+      <div class="ico" style="background:var(--brand-weak);color:var(--brand)">📈</div>
+      <div class="label">Credit Available</div>
+      <div class="val tnum">$43,260</div>
+      <div class="sub">13% utilization</div>
+    </div>
+    <div class="card pad kpi">
+      <div class="ico" style="background:var(--brand-weak);color:var(--brand)">🏆</div>
+      <div class="label">Points</div>
+      <div class="val tnum">312,400</div>
+      <div class="sub">≈ $4,060 value</div>
+    </div>
+  </section>
+
+  <!-- Cards -->
+  <div class="sec-h">
+    <h2>Your Cards</h2><span class="count">4</span>
+    <span class="link">Manage →</span>
+  </div>
+  <section class="cards-grid">
+    <!-- tile 1 -->
+    <div class="cctile">
+      <div class="top" style="background:linear-gradient(120deg,#1e3a8a,#0b1f4d)">
+        <div><div class="nm">VOWIDEAS Chase Card</div><div class="m">•••• 8213</div></div>
+        <div class="m">Chase</div>
+      </div>
+      <div class="body">
+        <div class="row"><span class="k">Balance</span><span class="v tnum">$1,890</span></div>
+        <div class="row"><span class="k">Statement due</span><span class="v tnum">$1,890</span></div>
+        <div class="util"><span style="width:38%;background:var(--warning)"></span></div>
+        <div class="util-meta"><span>38% of $5,000 limit</span><span>$3,110 left</span></div>
+        <div class="due-chip"><span class="pill warn">⏱ Due Oct 27</span></div>
+      </div>
+    </div>
+    <!-- tile 2 -->
+    <div class="cctile">
+      <div class="top" style="background:linear-gradient(120deg,#334155,#0f172a)">
+        <div><div class="nm">Amex Platinum</div><div class="m">•••• 1004</div></div>
+        <div class="m">Amex</div>
+      </div>
+      <div class="body">
+        <div class="row"><span class="k">Balance</span><span class="v tnum">$650</span></div>
+        <div class="row"><span class="k">Statement due</span><span class="v tnum">$650</span></div>
+        <div class="util"><span style="width:9%;background:var(--good)"></span></div>
+        <div class="util-meta"><span>9% of $7,000 limit</span><span>$6,350 left</span></div>
+        <div class="due-chip"><span class="pill good">✓ Due Oct 30</span></div>
+      </div>
+    </div>
+    <!-- tile 3 -->
+    <div class="cctile">
+      <div class="top" style="background:linear-gradient(120deg,#0f766e,#083d38)">
+        <div><div class="nm">Capital One Venture</div><div class="m">•••• 7781</div></div>
+        <div class="m">Capital One</div>
+      </div>
+      <div class="body">
+        <div class="row"><span class="k">Balance</span><span class="v tnum">$4,200</span></div>
+        <div class="row"><span class="k">Statement due</span><span class="v tnum">$0 · paid</span></div>
+        <div class="util"><span style="width:84%;background:var(--critical)"></span></div>
+        <div class="util-meta"><span>84% of $5,000 limit</span><span>$800 left</span></div>
+        <div class="due-chip"><span class="pill crit">⚠ High utilization</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Activity -->
+  <div class="two">
+    <div>
+      <div class="sec-h"><h2>Recent Transactions</h2><span class="link">View all →</span></div>
+      <div class="card pad">
+        <div class="scroll">
+          <div class="txn">
+            <div class="tx-ico tx-out">↗</div>
+            <div><div class="tx-nm">Meta Ads <span class="pill new">new</span></div><div class="tx-meta">Oct 24 · VOWIDEAS Chase · Advertising</div></div>
+            <span class="tx-amt tnum">−$420.00</span>
+          </div>
+          <div class="txn">
+            <div class="tx-ico tx-out">↗</div>
+            <div><div class="tx-nm">Amazon Web Services <span class="pill pend">pending</span></div><div class="tx-meta">Oct 24 · Amex Platinum · Software</div></div>
+            <span class="tx-amt tnum">−$188.50</span>
+          </div>
+          <div class="txn">
+            <div class="tx-ico tx-in">↙</div>
+            <div><div class="tx-nm">Stripe payout <span class="pill new">new</span></div><div class="tx-meta">Oct 23 · Chase Checking · Income</div></div>
+            <span class="tx-amt in tnum">+$3,250.00</span>
+          </div>
+          <div class="txn">
+            <div class="tx-ico tx-out">↗</div>
+            <div><div class="tx-nm">Whole Foods</div><div class="tx-meta">Oct 23 · Amex Platinum · Groceries</div></div>
+            <span class="tx-amt tnum">−$96.14</span>
+          </div>
+          <div class="txn">
+            <div class="tx-ico tx-out">↗</div>
+            <div><div class="tx-nm">Uber</div><div class="tx-meta">Oct 22 · Capital One Venture · Travel</div></div>
+            <span class="tx-amt tnum">−$28.40</span>
+          </div>
+          <div class="txn">
+            <div class="tx-ico tx-out">↗</div>
+            <div><div class="tx-nm">Notion</div><div class="tx-meta">Oct 22 · Amex Platinum · Software</div></div>
+            <span class="tx-amt tnum">−$16.00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-h"><h2>Recurring</h2><span class="count">~$1,240/mo</span></div>
+      <div class="card pad">
+        <div class="recur"><span class="dot"></span><div><div style="font-weight:600">Google Workspace</div><div class="tx-meta">Monthly · next Nov 1</div></div><span class="tx-amt tnum">$72</span></div>
+        <div class="recur"><span class="dot"></span><div><div style="font-weight:600">AWS</div><div class="tx-meta">Monthly · next Nov 2</div></div><span class="tx-amt tnum">$540</span></div>
+        <div class="recur"><span class="dot"></span><div><div style="font-weight:600">Adobe CC</div><div class="tx-meta">Monthly · next Nov 5</div></div><span class="tx-amt tnum">$55</span></div>
+        <div class="recur"><span class="dot"></span><div><div style="font-weight:600">Rent</div><div class="tx-meta">Monthly · next Nov 1</div></div><span class="tx-amt tnum">$2,100</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hint">Mockup · sample data · toggle 🌙 top-right for dark mode</div>
+</div>
+
+<script>
+  const btn = document.getElementById('themeBtn');
+  btn.addEventListener('click', () => {
+    const el = document.documentElement;
+    const dark = el.getAttribute('data-theme') === 'dark';
+    el.setAttribute('data-theme', dark ? 'light' : 'dark');
+    btn.textContent = dark ? '🌙' : '☀️';
+  });
+</script>
+</body>
+</html>

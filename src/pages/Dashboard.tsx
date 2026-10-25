@@ -286,6 +286,23 @@ const Dashboard = () => {
       (t.creditCardId && cardIds.has(t.creditCardId)) || (t.accountId && acctIds.has(t.accountId)));
   }, [transactions, cards, accounts, company]);
 
+  // "Recent Transactions" list: non-payment activity ordered by when it was
+  // SYNCED into our DB (created_at), not by posting date — so a charge that just
+  // arrived in a sync but is dated a few days ago still surfaces at the top
+  // instead of being buried below newer-dated rows. Falls back to posting date
+  // when created_at is missing.
+  const recentTxns = useMemo(() => {
+    const sortKey = (t: FinanceTransaction) => t.createdAt ?? t.date;
+    return brandTxns
+      .filter((t) => t.type !== 'payment')
+      .slice()
+      .sort((a, b) => (sortKey(a) < sortKey(b) ? 1 : sortKey(a) > sortKey(b) ? -1 : 0));
+  }, [brandTxns]);
+  // A transaction is "new" if it was synced into our DB within the last 48h.
+  const NEW_WINDOW_MS = 48 * 60 * 60 * 1000;
+  const isNewTxn = (t: FinanceTransaction) =>
+    t.createdAt != null && Date.now() - new Date(t.createdAt).getTime() < NEW_WINDOW_MS;
+
   // ── Top-line numbers ────────────────────────────────────────────────
   const availableCash = depository.reduce((s, a) => s + a.availableBalance, 0);
   const totalCardDebt = visibleCards.reduce((s, c) => s + c.currentBalance, 0);
@@ -293,22 +310,6 @@ const Dashboard = () => {
   const creditAvailable = visibleCards.reduce(
     (s, c) => s + Math.max(0, c.creditLimit - c.currentBalance), 0,
   );
-
-  const dueSoon = useMemo(() => {
-    return visibleCards
-      .map((c) => ({ card: c, due: resolveDue(c) }))
-      .filter((x) => x.due && x.due.days >= 0 && x.due.days <= 7 && !isSettled(x.card, paidFor(x.card.id)))
-      .sort((a, b) => (a.due!.days - b.due!.days));
-  }, [visibleCards]);
-  // Sum what actually has to be paid (statement balance), not the full card
-  // balance — matches the per-card "Pay" amount.
-  const dueSoonTotal = dueSoon.reduce((s, x) => {
-    const c = x.card;
-    const amountDue = (c.lastStatementBalance && c.lastStatementBalance > 0.005)
-      ? c.lastStatementBalance
-      : (c.currentBalance || c.minimumPayment || c.totalBalance || 0);
-    return s + amountDue;
-  }, 0);
 
   // ── Activity roll-up, scoped to a selected period ──────────────────
   const activityFrom = activityPeriod === 'month' ? isoMonthStart()
@@ -463,10 +464,21 @@ const Dashboard = () => {
   const adSig = (card: FinanceCard, ad: AdSpendStatus) => `ad:${card.id}:${thisYear}:${Math.floor(ad.fraction * 10)}`;
   const alertSig = (a: FinanceAlert) => `alert:${a.id}`;
 
-  const shownAttention = attentionCards.filter((c) => !dismissed.has(dueSig(c)));
   const shownInterest = interestRiskCards.filter(({ card }) => !dismissed.has(riskSig(card)));
   const shownAdSpend = adSpendWarnings.filter(({ card, ad }) => !dismissed.has(adSig(card, ad)));
   const shownAlerts = openAlerts.filter((a) => !dismissed.has(alertSig(a)));
+
+  // The "Due this week" hero's payment plan: every card that needs a payment
+  // (overdue / due soon / unpaid statement), with the amount owed and timing.
+  // Same source set as the old due-reminder rows, now shown as the headline.
+  const duePlan = useMemo(() => attentionCards.map((c) => {
+    const amount = (c.lastStatementBalance && c.lastStatementBalance > 0.005)
+      ? c.lastStatementBalance
+      : (c.currentBalance || c.minimumPayment || c.totalBalance || 0);
+    return { card: c, amount, due: resolveDue(c), overdue: c.isOverdue };
+  }), [attentionCards]);
+  const duePlanTotal = duePlan.reduce((s, x) => s + x.amount, 0);
+  const overdueCount = duePlan.filter((x) => x.overdue).length;
 
   // Forecast: lowest projected balance point over the horizon.
   const lowestPoint = useMemo(() => {
@@ -561,32 +573,100 @@ const Dashboard = () => {
               </div>
             )}
 
+            {/* Due this week — the headline "what do I owe, and when" panel */}
+            <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide font-bold text-muted-foreground">Due this week</p>
+                  {duePlan.length === 0 ? (
+                    <>
+                      <p className="text-3xl font-bold tracking-tight mt-1 flex items-center gap-2">
+                        <CheckCircle2 className="w-7 h-7 text-success" /> All caught up
+                      </p>
+                      <p className="text-muted-foreground mt-1">Nothing due right now — nice.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-4xl font-bold tracking-tight mt-1 tabular-nums">
+                        {fmtMoney(duePlanTotal)}
+                        <span className="text-base font-semibold text-muted-foreground"> across {duePlan.length} {duePlan.length === 1 ? 'card' : 'cards'}</span>
+                      </p>
+                      <p className={cn('mt-1 text-sm', overdueCount ? 'text-destructive font-medium' : 'text-muted-foreground')}>
+                        {overdueCount
+                          ? `${overdueCount} overdue — pay now to avoid fees`
+                          : 'Nothing overdue — pay by the due dates to skip interest'}
+                      </p>
+                      <div className="mt-4 space-y-2">
+                        {duePlan.slice(0, 4).map(({ card, amount, due, overdue }) => {
+                          const days = due?.days ?? null;
+                          const chip = overdue
+                            ? { cls: 'bg-destructive/10 text-destructive border-destructive/30', Icon: AlertTriangle, text: 'Overdue' }
+                            : days != null
+                              ? {
+                                  cls: days <= 3 ? 'bg-destructive/10 text-destructive border-destructive/30'
+                                    : days <= 7 ? 'bg-warning/10 text-warning border-warning/30'
+                                    : 'bg-muted text-muted-foreground border-transparent',
+                                  Icon: days <= 3 ? AlertTriangle : CalendarClock,
+                                  text: days <= 0 ? 'Due today' : days === 1 ? 'Due in 1 day' : `Due in ${days} days`,
+                                }
+                              : { cls: 'bg-muted text-muted-foreground border-transparent', Icon: CalendarClock, text: 'No due date' };
+                          return (
+                            <button key={card.id} onClick={() => setSelectedCard(card)}
+                              className="w-full flex items-center gap-3 rounded-xl border border-border/70 bg-muted/40 hover:bg-muted px-3 py-2.5 text-left transition-colors">
+                              <span className="w-2.5 h-9 rounded-full shrink-0" style={{ background: card.tileColor ?? 'hsl(var(--primary))' }} />
+                              <div className="min-w-0">
+                                <p className="font-semibold truncate">{card.name}</p>
+                                <p className="text-xs text-muted-foreground truncate">•••• {card.lastFour} · statement balance</p>
+                              </div>
+                              <div className="ml-auto text-right shrink-0">
+                                <p className="font-bold tabular-nums">{fmtMoney(amount)}</p>
+                                <span className={cn('mt-0.5 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold', chip.cls)}>
+                                  <chip.Icon className="w-3 h-3" />{chip.text}
+                                </span>
+                              </div>
+                              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                            </button>
+                          );
+                        })}
+                        {duePlan.length > 4 && (
+                          <p className="text-xs text-muted-foreground pl-1">+{duePlan.length - 4} more below in Your Cards</p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className="lg:border-l lg:border-border lg:pl-5 flex flex-col">
+                  <p className="text-[11px] uppercase tracking-wide font-bold text-muted-foreground">Net cash position</p>
+                  <p className={cn('text-3xl font-bold tracking-tight mt-1 tabular-nums',
+                    availableCash - totalCardDebt < 0 && 'text-destructive')}>
+                    {fmtMoney(availableCash - totalCardDebt)}
+                  </p>
+                  <div className="mt-3 space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground flex items-center gap-2"><Landmark className="w-4 h-4 text-success" />Available cash</span>
+                      <span className="font-semibold tabular-nums">{fmtMoney(availableCash)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground flex items-center gap-2"><CardIcon className="w-4 h-4 text-warning" />Card debt</span>
+                      <span className="font-semibold tabular-nums">−{fmtMoney(totalCardDebt)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground flex items-center gap-2"><Percent className="w-4 h-4 text-primary" />Credit available</span>
+                      <span className="font-semibold tabular-nums">{fmtMoney(creditAvailable)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Needs Attention */}
-            {(shownAttention.length > 0 || shownAlerts.length > 0 || shownInterest.length > 0 || shownAdSpend.length > 0) && (
+            {(shownAlerts.length > 0 || shownInterest.length > 0 || shownAdSpend.length > 0) && (
               <div className="rounded-2xl border border-warning/40 bg-warning/5 p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <Bell className="w-4 h-4 text-warning" />
                   <h3 className="font-semibold text-foreground">Needs Attention</h3>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {shownAttention.map((c) => {
-                    const due = resolveDue(c);
-                    const urgent = c.isOverdue || (due != null && due.days <= 3);
-                    return (
-                      <AttentionItem key={c.id} onOpen={() => setSelectedCard(c)} onDismiss={() => dismiss(dueSig(c))}>
-                        <div className="min-w-0">
-                          <p className="font-medium truncate">{c.name} <span className="text-muted-foreground font-normal">••{c.lastFour}</span></p>
-                          <p className="text-xs text-muted-foreground">
-                            {c.isOverdue ? 'Overdue' : due ? (due.days <= 0 ? 'Due today' : `Due in ${due.days} days`) : 'Due soon'}
-                            {due ? ` · ${format(due.date, 'MMM d')}` : ''}
-                          </p>
-                        </div>
-                        <span className={cn('font-semibold whitespace-nowrap', urgent ? 'text-destructive' : 'text-warning')}>
-                          {fmtMoney(c.lastStatementBalance ?? c.currentBalance)}
-                        </span>
-                      </AttentionItem>
-                    );
-                  })}
                   {shownInterest.map(({ card, risk }) => (
                     <AttentionItem key={`ir-${card.id}`} onOpen={() => setSelectedCard(card)} onDismiss={() => dismiss(riskSig(card))} borderClass="border-destructive/30">
                       <div className="flex items-start gap-2 min-w-0">
@@ -653,9 +733,8 @@ const Dashboard = () => {
               <Kpi label="Net Cash Position" value={fmtMoney(availableCash - totalCardDebt)} icon={TrendingUp}
                    tone={availableCash - totalCardDebt >= 0 ? 'success' : 'danger'}
                    sub="cash minus card debt" />
-              <Kpi label="Due in 7 Days" value={fmtMoney(dueSoonTotal)} icon={CalendarClock}
-                   tone={dueSoon.length ? 'danger' : 'muted'}
-                   sub={dueSoon.length ? `${dueSoon.length} ${dueSoon.length === 1 ? 'card' : 'cards'} due` : 'nothing due'} />
+              <Kpi label="Credit Available" value={fmtMoney(creditAvailable)} icon={Percent} tone="primary"
+                   sub={`across ${visibleCards.length} ${visibleCards.length === 1 ? 'card' : 'cards'}`} />
             </div>
 
             {/* Bank accounts — prominent, on top */}
@@ -791,12 +870,12 @@ const Dashboard = () => {
               </div>
               <div className="bg-card rounded-2xl border border-border p-5">
                 <SectionTitle icon={TrendingDown}>Recent Transactions</SectionTitle>
-                {brandTxns.length === 0 ? (
+                {recentTxns.length === 0 ? (
                   <Empty>No transactions synced yet.</Empty>
                 ) : (
-                  <div className="space-y-2 mt-3">
-                    {brandTxns.filter((t) => t.type !== 'payment').slice(0, 8).map((t) => (
-                      <TxnRow key={t.id} txn={t} source={sourceOf(t)} />
+                  <div className="space-y-2 mt-3 max-h-96 overflow-y-auto -mx-1 px-1">
+                    {recentTxns.slice(0, 50).map((t) => (
+                      <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)} />
                     ))}
                   </div>
                 )}
@@ -1620,7 +1699,7 @@ function payeeAndVia(rawName: string, proc: string | null): { name: string; show
   return { name: cleaned, showVia: true };
 }
 
-function TxnRow({ txn, source }: { txn: FinanceTransaction; source?: string | null }) {
+function TxnRow({ txn, source, isNew }: { txn: FinanceTransaction; source?: string | null; isNew?: boolean }) {
   const inflow = txn.type === 'income' || txn.type === 'refund';
   const isPayment = txn.type === 'payment';
   // Show the raw description exactly as the bank/Amex statement does — no stripping.
@@ -1638,13 +1717,14 @@ function TxnRow({ txn, source }: { txn: FinanceTransaction; source?: string | nu
         <div className="min-w-0">
           <p className="font-medium truncate leading-tight">
             {name}
+            {isNew && <span className="ml-2 text-[11px] font-semibold align-middle rounded-full bg-success text-success-foreground px-2 py-0.5 whitespace-nowrap">new</span>}
+            {txn.isPending && <span className="ml-2 text-[11px] font-semibold align-middle rounded-full bg-warning/15 text-warning border border-warning/30 px-2 py-0.5 whitespace-nowrap">pending</span>}
             {showVia && <span className="ml-2 text-[11px] font-semibold align-middle rounded-full bg-primary text-primary-foreground border border-primary px-2 py-0.5 whitespace-nowrap">via {proc}</span>}
           </p>
           <p className="text-xs text-muted-foreground truncate">
             {format(parseISO(txn.date), 'MMM d, yyyy')}
             {source ? ` · ${source}` : ''}
             {txn.category ? ` · ${txn.category}` : ''}
-            {txn.isPending ? ' · pending' : ''}
           </p>
         </div>
       </div>
