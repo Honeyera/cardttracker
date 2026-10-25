@@ -47,6 +47,13 @@ select cron.schedule(
   $$
 );
 
--- To verify:   select * from cron.job;
--- To test now: select net.http_post(url := '...same as above...', headers := ...);
+-- To verify:   select jobname, schedule, active from cron.job;
 -- To undo:     select cron.unschedule('attention-alert-daily');
+--
+-- To send a TEST email right now (snapshot of current balances, ignores the
+-- due-window and dedup — always emails). Replace <CRON_SECRET> with your value:
+--   select net.http_post(
+--     url := 'https://cihandjyoojthqjfqarf.supabase.co/functions/v1/attention-alert',
+--     headers := jsonb_build_object('Content-Type','application/json','x-cron-secret','<CRON_SECRET>'),
+--     body := '{"test": true}'::jsonb
+--   );
