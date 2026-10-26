@@ -29,14 +29,27 @@ function classifyTxn(t: any, isCredit: boolean): { type: string; amount: number 
     cat.includes("credit_card_payment") ||
     cat.startsWith("loan_payments") ||
     /autopay|e-?payment|card\s*(pmt|payment)|crd\s*pmt|cardmember|bill\s*pay|thank you/.test(name);
+  // Money moved between the owner's own accounts (bank↔bank, to savings, ATM
+  // withdrawal, wire, deposit). Plaid's category primary is TRANSFER_IN /
+  // TRANSFER_OUT. These are NOT spending or income — exclude them from both so
+  // a self-transfer doesn't inflate spend (and its matching deposit income).
+  const isTransfer = cat.startsWith("transfer_in") || cat.startsWith("transfer_out");
 
   if (isCredit) {
     // On a card, a negative amount is money in: a real payment or a refund/credit.
     if (amount >= 0) return { type: "expense", amount: abs };
     return { type: looksLikeCardPayment ? "payment" : "refund", amount: abs };
   }
-  // On a bank account, a positive amount is money out: a card payment or a purchase.
-  if (amount >= 0) return { type: looksLikeCardPayment ? "payment" : "expense", amount: abs };
+  // On a bank account, a positive amount is money out: a card payment, a transfer
+  // to another account, or a real purchase (check card-payment first so statement
+  // logic keeps working, then transfers, then everything else is spend).
+  if (amount >= 0) {
+    if (looksLikeCardPayment) return { type: "payment", amount: abs };
+    if (isTransfer) return { type: "transfer", amount: abs };
+    return { type: "expense", amount: abs };
+  }
+  // Money in: a transfer from another account, or real income (deposits/paychecks).
+  if (isTransfer) return { type: "transfer", amount: abs };
   return { type: "income", amount: abs };
 }
 
