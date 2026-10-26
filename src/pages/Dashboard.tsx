@@ -220,6 +220,7 @@ const Dashboard = () => {
   const [activityPeriod, setActivityPeriod] = useState<'month' | '30d' | '90d' | 'ytd' | 'all'>('month');
   const [cardSort, setCardSort] = useState<CardSort>('urgency');
   const [activityDetail, setActivityDetail] = useState<null | 'income' | 'spend' | 'payments'>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null); // YYYY-MM clicked on the spend chart
   // Dismissed alerts, keyed by a per-cycle signature so they return when action
   // is next needed (e.g. new due date / new statement). Persisted per browser.
   const [dismissed, setDismissed] = useState<Set<string>>(() => {
@@ -458,6 +459,26 @@ const Dashboard = () => {
     }[activityDetail];
     return { ...cfg, period: periodLabel };
   }, [activityDetail, activityTxns, payments, periodLabel]);
+
+  // Breakdown for a month clicked on the spending chart: that month's spend
+  // transactions (same definition as the Spending flow), grouped by source.
+  const monthBreakdown = useMemo(() => {
+    if (!selectedMonth) return null;
+    const inMonth = (t: FinanceTransaction) => t.date.slice(0, 7) === selectedMonth;
+    const txns = [
+      ...brandTxns.filter((t) => inMonth(t) && (t.type === 'expense' || t.type === 'fee')),
+      ...brandTxns.filter((t) => inMonth(t) && t.type === 'refund').map((t) => ({ ...t, amount: -t.amount })),
+    ];
+    let label = selectedMonth;
+    try { label = format(new Date(`${selectedMonth}-01T00:00:00`), 'MMMM yyyy'); } catch { /* keep key */ }
+    return {
+      title: 'Spending',
+      tone: 'warning' as Tone,
+      calc: 'Purchases + fees, net of refunds (refunds shown as negative). Excludes card payments & transfers.',
+      txns,
+      period: label,
+    };
+  }, [selectedMonth, brandTxns]);
 
   // Cards needing attention: overdue, or due within 7 days with a balance owed.
   const attentionCards = useMemo(
@@ -979,7 +1000,8 @@ const Dashboard = () => {
                   Net spend per month (purchases + fees − refunds; excludes card payments & transfers).
                   {monthlySpend.some((m) => m.partial) && ' Current month is still in progress.'}
                 </p>
-                <MonthlySpendChart data={monthlySpend} average={spendInsight.avg} />
+                <MonthlySpendChart data={monthlySpend} average={spendInsight.avg} onSelectMonth={setSelectedMonth} />
+                <p className="text-[11px] text-muted-foreground mt-2">Tip: click a month to see what you spent on.</p>
               </div>
             )}
 
@@ -1075,6 +1097,12 @@ const Dashboard = () => {
         detail={activityBreakdown}
         sourceOf={sourceOf}
         onClose={() => setActivityDetail(null)}
+      />
+
+      <ActivityBreakdownDialog
+        detail={monthBreakdown}
+        sourceOf={sourceOf}
+        onClose={() => setSelectedMonth(null)}
       />
     </div>
   );
@@ -1621,12 +1649,18 @@ function SpendTooltip({ active, payload }: { active?: boolean; payload?: { paylo
 // Month-over-month spending line. Single series (primary blue) with a soft area
 // wash, a dashed average reference line, a crosshair tooltip, and the in-progress
 // month drawn as a hollow endpoint so a partial month isn't mistaken for a dip.
-function MonthlySpendChart({ data, average }: { data: SpendPoint[]; average: number }) {
+function MonthlySpendChart({ data, average, onSelectMonth }: { data: SpendPoint[]; average: number; onSelectMonth?: (key: string) => void }) {
   const lastIdx = data.length - 1;
+  const handleClick = (state: { activePayload?: { payload: SpendPoint }[] }) => {
+    const p = state?.activePayload?.[0]?.payload;
+    if (p) onSelectMonth?.(p.key);
+  };
   return (
     <div className="h-60 w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 12, right: 16, left: 4, bottom: 0 }}>
+        <ComposedChart data={data} margin={{ top: 12, right: 16, left: 4, bottom: 0 }}
+          onClick={onSelectMonth ? handleClick : undefined}
+          style={onSelectMonth ? { cursor: 'pointer' } : undefined}>
           <defs>
             <linearGradient id="spendWash" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.14} />
