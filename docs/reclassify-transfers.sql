@@ -45,3 +45,16 @@ where account_id is not null and transaction_type = 'transfer'
 update public.transactions set transaction_type = 'expense'
 where account_id is not null and transaction_type = 'transfer'
   and description ~* 'boca falls';
+
+-- Credit-card BALANCE TRANSFERS move existing debt, not new spending:
+--   principal → transfer (out of spend); the BT fee → fee (still a real cost).
+update public.transactions set transaction_type = 'transfer'
+where credit_card_id is not null
+  and description ~* 'balance\s*transfer'
+  and description !~* 'fee'
+  and transaction_type = 'expense';
+update public.transactions set transaction_type = 'fee'
+where credit_card_id is not null
+  and description ~* 'balance\s*transfer'
+  and description ~* 'fee'
+  and transaction_type = 'expense';

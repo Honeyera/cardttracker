@@ -46,8 +46,13 @@ function classifyTxn(t: any, isCredit: boolean): { type: string; amount: number 
   const isTransfer = plaidTransfer || isOwnerBizTransfer;
 
   if (isCredit) {
-    // On a card, a negative amount is money in: a real payment or a refund/credit.
-    if (amount >= 0) return { type: "expense", amount: abs };
+    if (amount >= 0) {
+      // A balance transfer moves EXISTING debt onto the card — not new spending.
+      // The transferred principal is a transfer; the BT fee is a real finance fee.
+      if (/balance\s*transfer/.test(name)) return { type: /fee/.test(name) ? "fee" : "transfer", amount: abs };
+      return { type: "expense", amount: abs };
+    }
+    // Money in on a card: a real payment or a refund/credit.
     return { type: looksLikeCardPayment ? "payment" : "refund", amount: abs };
   }
   // On a bank account, a positive amount is money out: a card payment, a transfer
