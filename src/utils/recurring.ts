@@ -6,7 +6,7 @@ import { FinanceTransaction } from '@/hooks/useFinanceData';
 // (so variable spend like ad platforms or inventory doesn't masquerade as a
 // subscription). Think: SaaS, software, memberships, recurring services.
 
-export type Cadence = 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
+export type Cadence = 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'semiannual' | 'yearly';
 
 export interface RecurringCharge {
   key: string;
@@ -52,12 +52,13 @@ function cadenceFor(gapDays: number): Cadence | null {
   if (gapDays >= 10 && gapDays <= 18) return 'biweekly';
   if (gapDays >= 19 && gapDays <= 45) return 'monthly';
   if (gapDays >= 46 && gapDays <= 135) return 'quarterly';
+  if (gapDays >= 150 && gapDays <= 250) return 'semiannual'; // ~6-month billing
   if (gapDays >= 300 && gapDays <= 430) return 'yearly';
   return null;
 }
 
 const CADENCE_DAYS: Record<Cadence, number> = {
-  weekly: 7, biweekly: 14, monthly: 30.44, quarterly: 91.3, yearly: 365,
+  weekly: 7, biweekly: 14, monthly: 30.44, quarterly: 91.3, semiannual: 182.6, yearly: 365,
 };
 
 const titleCase = (s: string) =>

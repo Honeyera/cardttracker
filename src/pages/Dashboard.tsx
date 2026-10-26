@@ -1049,7 +1049,7 @@ const Dashboard = () => {
                     const src = card ? `${card.name}${card.lastFour ? ` ••${card.lastFour}` : ''}`
                       : acct ? `${acct.name}${acct.lastFour ? ` ••${acct.lastFour}` : ''}` : null;
                     const cadenceLabel: Record<Cadence, string> = {
-                      weekly: 'Weekly', biweekly: 'Every 2 wks', monthly: 'Monthly', quarterly: 'Quarterly', yearly: 'Yearly',
+                      weekly: 'Weekly', biweekly: 'Every 2 wks', monthly: 'Monthly', quarterly: 'Quarterly', semiannual: 'Every 6 mo', yearly: 'Yearly',
                     };
                     return (
                       <div key={r.key} className="flex items-center justify-between gap-3 py-1.5 border-b border-border/50 last:border-0">
