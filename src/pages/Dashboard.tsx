@@ -358,10 +358,18 @@ const Dashboard = () => {
   // Month-over-month spending: net spend (purchases + fees − refunds) per
   // calendar month for the trailing 12 months, from the first month with data
   // up to now. Gaps fill as 0; the current (in-progress) month is flagged partial.
+  // Bank accounts kept OUT of the Monthly Spending view (not the owner's personal
+  // spending) — matched by last-four so a rename won't break it. '0015' = Michael's CHK.
+  const spendExcludedAccountIds = useMemo(() => {
+    const excludeLast4 = new Set(['0015']);
+    return new Set(accounts.filter((a) => a.lastFour && excludeLast4.has(a.lastFour)).map((a) => a.id));
+  }, [accounts]);
+
   const monthlySpend = useMemo(() => {
     const byMonth = new Map<string, number>();
     for (const t of brandTxns) {
       if (t.type !== 'expense' && t.type !== 'fee' && t.type !== 'refund') continue;
+      if (t.accountId && spendExcludedAccountIds.has(t.accountId)) continue;
       const key = t.date.slice(0, 7); // YYYY-MM
       byMonth.set(key, (byMonth.get(key) ?? 0) + (t.type === 'refund' ? -t.amount : t.amount));
     }
@@ -382,7 +390,7 @@ const Dashboard = () => {
       });
     }
     return out;
-  }, [brandTxns]);
+  }, [brandTxns, spendExcludedAccountIds]);
   // Trend read on COMPLETE months only (the current month is partial, so comparing
   // it would falsely look "down"). Average line covers the completed months.
   const spendInsight = useMemo(() => {
@@ -465,7 +473,8 @@ const Dashboard = () => {
   // transactions (same definition as the Spending flow), grouped by source.
   const monthBreakdown = useMemo(() => {
     if (!selectedMonth) return null;
-    const inMonth = (t: FinanceTransaction) => t.date.slice(0, 7) === selectedMonth;
+    const inMonth = (t: FinanceTransaction) =>
+      t.date.slice(0, 7) === selectedMonth && !(t.accountId && spendExcludedAccountIds.has(t.accountId));
     const txns = [
       ...brandTxns.filter((t) => inMonth(t) && (t.type === 'expense' || t.type === 'fee')),
       ...brandTxns.filter((t) => inMonth(t) && t.type === 'refund').map((t) => ({ ...t, amount: -t.amount })),
@@ -479,7 +488,7 @@ const Dashboard = () => {
       txns,
       period: label,
     };
-  }, [selectedMonth, brandTxns]);
+  }, [selectedMonth, brandTxns, spendExcludedAccountIds]);
 
   // Cards needing attention: overdue, or due within 7 days with a balance owed.
   const attentionCards = useMemo(
