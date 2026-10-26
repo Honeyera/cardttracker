@@ -62,6 +62,12 @@ import { cn } from '@/lib/utils';
 
 const PEOPLE = ['Tomer', 'Leo'] as const;
 
+// Issuer card names can contain invisible characters (e.g. a non-breaking space
+// in "Ultimate Rewards®" as synced from Plaid), which silently breaks plain
+// substring checks. Reduce to lowercase alphanumerics with single spaces first.
+const normalizeCardText = (s: string | null | undefined) =>
+  (s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
 function AvailablePointsTile({
   cardName,
   lastFive,
@@ -346,12 +352,16 @@ export default function Points() {
   // each take an equal amount within each type — Gold/Amex and Chase points
   // are not interchangeable, so they don't net against each other.
   const balanceByCategory = useMemo(() => {
-    const goldIds = new Set(cards.filter((c) => c.color === 'gold').map((c) => c.id));
+    const goldIds = new Set(
+      cards
+        .filter((c) => c.color === 'gold' || normalizeCardText(c.name).includes('gold'))
+        .map((c) => c.id)
+    );
     const chaseIds = new Set(
       cards
         .filter((c) => {
-          const haystack = `${c.companyName ?? ''} ${c.name ?? ''}`.toLowerCase();
-          return haystack.includes('chase');
+          const haystack = normalizeCardText(`${c.companyName ?? ''} ${c.name ?? ''}`);
+          return ['chase', 'sapphire', 'ultimate rewards', 'freedom', 'ink'].some((t) => haystack.includes(t));
         })
         .map((c) => c.id)
     );
@@ -360,9 +370,9 @@ export default function Points() {
       const cardId = p.card_id ?? cards.find((c) => c.name === p.card_name)?.id;
       if (cardId && goldIds.has(cardId)) return 'gold';
       if (cardId && chaseIds.has(cardId)) return 'chase';
-      const name = (p.card_name ?? '').toLowerCase();
+      const name = normalizeCardText(p.card_name);
       if (name.includes('gold')) return 'gold';
-      if (name.includes('chase')) return 'chase';
+      if (['chase', 'sapphire', 'ultimate rewards', 'freedom', 'ink'].some((t) => name.includes(t))) return 'chase';
       return null;
     };
 
@@ -396,7 +406,11 @@ export default function Points() {
 
   // Available-points totals by category
   const goldCardsTotal = useMemo(() => {
-    const goldIds = new Set(cards.filter((c) => c.color === 'gold').map((c) => c.id));
+    const goldIds = new Set(
+      cards
+        .filter((c) => c.color === 'gold' || normalizeCardText(c.name).includes('gold'))
+        .map((c) => c.id)
+    );
     return availablePoints
       .filter((ap) => goldIds.has(ap.card_id))
       .reduce((sum, ap) => sum + (ap.available_points ?? 0), 0);
@@ -406,8 +420,8 @@ export default function Points() {
     const chaseIds = new Set(
       cards
         .filter((c) => {
-          const haystack = `${c.companyName ?? ''} ${c.name ?? ''}`.toLowerCase();
-          return haystack.includes('chase');
+          const haystack = normalizeCardText(`${c.companyName ?? ''} ${c.name ?? ''}`);
+          return ['chase', 'sapphire', 'ultimate rewards', 'freedom', 'ink'].some((t) => haystack.includes(t));
         })
         .map((c) => c.id)
     );
