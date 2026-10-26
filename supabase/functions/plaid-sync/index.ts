@@ -34,11 +34,15 @@ function classifyTxn(t: any, isCredit: boolean): { type: string; amount: number 
   // TRANSFER_OUT. These are NOT spending or income — exclude them from both so
   // a self-transfer doesn't inflate spend (and its matching deposit income).
   const plaidTransfer = cat.startsWith("transfer_in") || cat.startsWith("transfer_out");
-  // Owner-specific: the owner moves money between their LLC (VOWIDEAS) and their
-  // personal accounts — payroll, distributions, owner draws. That's their OWN
-  // money, not income or spend, even though Plaid tags payroll as INCOME. Treat
-  // any movement naming the business as a transfer (both directions).
-  const isOwnerBizTransfer = /vowideas/.test(name);
+  // Owner-specific: the owner moves their OWN money between their LLC (VOWIDEAS)
+  // and personal accounts — payroll, owner draws (RTP "instant payment credit"),
+  // payroll-tax debits, account-verification micro-deposits. Those are transfers,
+  // not income/spend (Plaid tags payroll as INCOME). Deliberately NARROW: it must
+  // name the business AND look like one of those movements — so a CLIENT paying
+  // the business (e.g. "… From <client> via mercury.com") stays income, and a
+  // purchase stays spend.
+  const isOwnerBizTransfer = /vowideas/.test(name)
+    && /payroll|instant payment credit|acct\s*verify/.test(name);
   const isTransfer = plaidTransfer || isOwnerBizTransfer;
 
   if (isCredit) {
