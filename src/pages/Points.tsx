@@ -351,7 +351,7 @@ export default function Points() {
       cards
         .filter((c) => {
           const haystack = `${c.companyName ?? ''} ${c.name ?? ''}`.toLowerCase();
-          return haystack.includes('chase');
+          return ['chase', 'sapphire', 'ultimate rewards', 'freedom', 'ink'].some((t) => haystack.includes(t));
         })
         .map((c) => c.id)
     );
@@ -362,7 +362,7 @@ export default function Points() {
       if (cardId && chaseIds.has(cardId)) return 'chase';
       const name = (p.card_name ?? '').toLowerCase();
       if (name.includes('gold')) return 'gold';
-      if (name.includes('chase')) return 'chase';
+      if (['chase', 'sapphire', 'ultimate rewards', 'freedom', 'ink'].some((t) => name.includes(t))) return 'chase';
       return null;
     };
 
@@ -407,7 +407,7 @@ export default function Points() {
       cards
         .filter((c) => {
           const haystack = `${c.companyName ?? ''} ${c.name ?? ''}`.toLowerCase();
-          return haystack.includes('chase');
+          return ['chase', 'sapphire', 'ultimate rewards', 'freedom', 'ink'].some((t) => haystack.includes(t));
         })
         .map((c) => c.id)
     );
