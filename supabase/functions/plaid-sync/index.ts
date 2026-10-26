@@ -33,7 +33,13 @@ function classifyTxn(t: any, isCredit: boolean): { type: string; amount: number 
   // withdrawal, wire, deposit). Plaid's category primary is TRANSFER_IN /
   // TRANSFER_OUT. These are NOT spending or income — exclude them from both so
   // a self-transfer doesn't inflate spend (and its matching deposit income).
-  const isTransfer = cat.startsWith("transfer_in") || cat.startsWith("transfer_out");
+  const plaidTransfer = cat.startsWith("transfer_in") || cat.startsWith("transfer_out");
+  // Owner-specific: the owner moves money between their LLC (VOWIDEAS) and their
+  // personal accounts — payroll, distributions, owner draws. That's their OWN
+  // money, not income or spend, even though Plaid tags payroll as INCOME. Treat
+  // any movement naming the business as a transfer (both directions).
+  const isOwnerBizTransfer = /vowideas/.test(name);
+  const isTransfer = plaidTransfer || isOwnerBizTransfer;
 
   if (isCredit) {
     // On a card, a negative amount is money in: a real payment or a refund/credit.

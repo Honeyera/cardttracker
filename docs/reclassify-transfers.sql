@@ -23,3 +23,13 @@ where credit_card_id is null
   and account_id is not null
   and transaction_type in ('expense', 'income')
   and category ~ '^transfer_(in|out)';
+
+-- Owner-specific: payroll / distributions / owner draws between the owner's LLC
+-- (VOWIDEAS) and personal accounts are the owner's OWN money — a transfer, not
+-- income or spend (Plaid tags payroll as INCOME, so the rule above misses it).
+-- Matches the isOwnerBizTransfer rule in plaid-sync classifyTxn.
+update public.transactions
+set transaction_type = 'transfer'
+where account_id is not null
+  and description ilike '%vowideas%'
+  and transaction_type in ('income', 'expense', 'payment');
