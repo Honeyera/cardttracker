@@ -20,6 +20,7 @@ export interface RecurringCharge {
   monthlyEquivalent: number; // normalized to a monthly cost
   accountId: string | null;
   creditCardId: string | null;
+  possible: boolean; // true = weak signal (only 2 charges seen) — flag, don't assert
 }
 
 const DAY = 86_400_000;
@@ -81,7 +82,7 @@ export function detectRecurring(transactions: FinanceTransaction[]): RecurringCh
 
   const out: RecurringCharge[] = [];
   for (const [gkey, txns] of groups) {
-    if (txns.length < 3) continue;
+    if (txns.length < 2) continue;
     const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
 
     // Collapse same-day duplicates to one point so a cadence can be read.
@@ -89,7 +90,9 @@ export function detectRecurring(transactions: FinanceTransaction[]): RecurringCh
     for (const t of sorted) {
       if (!byDate.length || byDate[byDate.length - 1].date !== t.date) byDate.push(t);
     }
-    if (byDate.length < 3) continue;
+    if (byDate.length < 2) continue;
+    // Two charges is a weak signal ("possible"); 3+ is a confirmed series.
+    const possible = byDate.length < 3;
 
     const gaps: number[] = [];
     for (let i = 1; i < byDate.length; i++) gaps.push(daysBetween(byDate[i - 1].date, byDate[i].date));
@@ -112,6 +115,14 @@ export function detectRecurring(transactions: FinanceTransaction[]): RecurringCh
     const nearMedian = amounts.filter((a) => Math.abs(a - medAmt) <= Math.max(2, medAmt * 0.25)).length;
     if (nearMedian / amounts.length < 0.6) continue;
 
+    // A 2-charge "possible" is noisy, so hold it to a higher bar: only short
+    // cadences (one long gap between two charges is too weak to call), and the
+    // two amounts must match tightly — otherwise it's just two similar purchases.
+    if (possible) {
+      if (cadence !== 'weekly' && cadence !== 'biweekly' && cadence !== 'monthly') continue;
+      if (Math.abs(amounts[0] - amounts[1]) > Math.max(1, medAmt * 0.12)) continue;
+    }
+
     const first = byDate[0];
     const last = byDate[byDate.length - 1];
 
@@ -130,6 +141,7 @@ export function detectRecurring(transactions: FinanceTransaction[]): RecurringCh
       monthlyEquivalent: medAmt * (30.44 / CADENCE_DAYS[cadence]),
       accountId: last.accountId,
       creditCardId: last.creditCardId,
+      possible,
     });
   }
 

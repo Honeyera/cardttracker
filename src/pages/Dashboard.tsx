@@ -398,6 +398,7 @@ const Dashboard = () => {
   // Recurring charges — detected from the FULL history (not the activity window).
   const recurring = useMemo(() => detectRecurring(brandTxns), [brandTxns]);
   const recurringMonthly = recurring.reduce((s, r) => s + r.monthlyEquivalent, 0);
+  const recurringYearly = recurringMonthly * 12;
   // Show most-recently-charged first ("latest on top"), by last charge date.
   const recurringSorted = useMemo(
     () => [...recurring].sort((a, b) => (a.lastDate < b.lastDate ? 1 : a.lastDate > b.lastDate ? -1 : 0)),
@@ -1005,6 +1006,58 @@ const Dashboard = () => {
               </div>
             )}
 
+            {/* Recurring charges — subscriptions / regular bills detected from history.
+                Surfaced prominently with the annual cost, so forgotten charges stand out. */}
+            {recurring.length > 0 && (
+              <div className="bg-card rounded-2xl border border-border p-5">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <SectionTitle icon={Repeat}>Recurring Charges</SectionTitle>
+                  <span className="text-sm text-muted-foreground">
+                    <span className="font-semibold text-foreground">{fmtMoney(recurringMonthly)}</span>/mo ·{' '}
+                    <span className="font-semibold text-foreground">{fmtMoney(recurringYearly)}</span>/yr · {recurring.length} found
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Charges that repeat on a schedule — a quick way to catch subscriptions you forgot you're paying for.
+                </p>
+                <div className="mt-3 space-y-1.5">
+                  {recurringSorted.slice(0, 12).map((r) => {
+                    const card = r.creditCardId ? cards.find((c) => c.id === r.creditCardId) : null;
+                    const acct = r.accountId ? accounts.find((a) => a.id === r.accountId) : null;
+                    const src = card ? `${card.name}${card.lastFour ? ` ••${card.lastFour}` : ''}`
+                      : acct ? `${acct.name}${acct.lastFour ? ` ••${acct.lastFour}` : ''}` : null;
+                    const cadenceLabel: Record<Cadence, string> = {
+                      weekly: 'Weekly', biweekly: 'Every 2 wks', monthly: 'Monthly', quarterly: 'Quarterly', semiannual: 'Every 6 mo', yearly: 'Yearly',
+                    };
+                    return (
+                      <div key={r.key} className="flex items-center justify-between gap-3 py-1.5 border-b border-border/50 last:border-0">
+                        <div className="min-w-0">
+                          <p className="font-medium truncate flex items-center gap-2">
+                            {r.label}
+                            {r.possible && (
+                              <span className="text-[10px] font-semibold uppercase tracking-wide rounded-full bg-warning/15 text-warning border border-warning/30 px-1.5 py-0.5 whitespace-nowrap">
+                                possible
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {cadenceLabel[r.cadence]} · {r.count}× · last {format(parseISO(r.lastDate), 'MMM d')} · next {format(parseISO(r.nextExpectedDate), 'MMM d')}
+                            {src ? ` · ${src}` : ''}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-semibold">{fmtMoney(r.typicalAmount, { cents: true })}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {r.cadence !== 'monthly' && `${fmtMoney(r.monthlyEquivalent)}/mo · `}{fmtMoney(r.monthlyEquivalent * 12)}/yr
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Payments + recent transactions */}
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="bg-card rounded-2xl border border-border p-5">
@@ -1033,45 +1086,6 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Recurring charges — subscriptions / regular bills detected from history */}
-            {recurring.length > 0 && (
-              <div className="bg-card rounded-2xl border border-border p-5">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <SectionTitle icon={Repeat}>Recurring Charges</SectionTitle>
-                  <span className="text-sm text-muted-foreground">
-                    ~<span className="font-semibold text-foreground">{fmtMoney(recurringMonthly)}</span>/mo · {recurring.length} found
-                  </span>
-                </div>
-                <div className="mt-3 space-y-1.5">
-                  {recurringSorted.slice(0, 10).map((r) => {
-                    const card = r.creditCardId ? cards.find((c) => c.id === r.creditCardId) : null;
-                    const acct = r.accountId ? accounts.find((a) => a.id === r.accountId) : null;
-                    const src = card ? `${card.name}${card.lastFour ? ` ••${card.lastFour}` : ''}`
-                      : acct ? `${acct.name}${acct.lastFour ? ` ••${acct.lastFour}` : ''}` : null;
-                    const cadenceLabel: Record<Cadence, string> = {
-                      weekly: 'Weekly', biweekly: 'Every 2 wks', monthly: 'Monthly', quarterly: 'Quarterly', semiannual: 'Every 6 mo', yearly: 'Yearly',
-                    };
-                    return (
-                      <div key={r.key} className="flex items-center justify-between gap-3 py-1.5 border-b border-border/50 last:border-0">
-                        <div className="min-w-0">
-                          <p className="font-medium truncate">{r.label}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {cadenceLabel[r.cadence]} · {r.count}× · last {format(parseISO(r.lastDate), 'MMM d')} · next {format(parseISO(r.nextExpectedDate), 'MMM d')}
-                            {src ? ` · ${src}` : ''}
-                          </p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="font-semibold">{fmtMoney(r.typicalAmount, { cents: true })}</p>
-                          {r.cadence !== 'monthly' && (
-                            <p className="text-[11px] text-muted-foreground">{fmtMoney(r.monthlyEquivalent)}/mo</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </>
         )}
       </main>
