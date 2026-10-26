@@ -24,12 +24,24 @@ where credit_card_id is null
   and transaction_type in ('expense', 'income')
   and category ~ '^transfer_(in|out)';
 
--- Owner-specific: payroll / distributions / owner draws between the owner's LLC
--- (VOWIDEAS) and personal accounts are the owner's OWN money — a transfer, not
--- income or spend (Plaid tags payroll as INCOME, so the rule above misses it).
--- Matches the isOwnerBizTransfer rule in plaid-sync classifyTxn.
+-- Owner-specific: the owner's OWN money moving with their LLC (VOWIDEAS) —
+-- payroll, owner draws ("instant payment credit"), payroll-tax debits, account
+-- verification — are transfers, not income/spend (Plaid tags payroll as INCOME).
+-- NARROW match (mirrors isOwnerBizTransfer in plaid-sync): must name the business
+-- AND look like one of those movements, so client payments / purchases are excluded.
 update public.transactions
 set transaction_type = 'transfer'
 where account_id is not null
-  and description ilike '%vowideas%'
+  and description ~* 'vowideas'
+  and description ~* 'payroll|instant payment credit|acct\s*verify'
   and transaction_type in ('income', 'expense', 'payment');
+
+-- Correct rows an earlier broad '%vowideas%' match mis-tagged as transfers:
+--   • "Tidy Teds … via mercury.com" = a client paying the business → income
+update public.transactions set transaction_type = 'income'
+where account_id is not null and transaction_type = 'transfer'
+  and description ~* 'tidy teds';
+--   • "BOCA FALLS … PURCHASE" = a real purchase → expense
+update public.transactions set transaction_type = 'expense'
+where account_id is not null and transaction_type = 'transfer'
+  and description ~* 'boca falls';
