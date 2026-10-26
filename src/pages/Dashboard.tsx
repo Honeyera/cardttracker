@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceDot } from 'recharts';
+import { AreaChart, Area, ComposedChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceDot, ReferenceLine } from 'recharts';
 import {
   Wallet, LayoutDashboard, CreditCard as CardIcon, Trophy, Loader2, Building2,
   ArrowDownRight, ArrowUpRight, Landmark, TrendingUp, TrendingDown, AlertTriangle,
@@ -353,6 +353,46 @@ const Dashboard = () => {
     return [...bankSide, ...unmatchedCardSide].sort((a, b) => b.date.localeCompare(a.date));
   }, [activityTxns]);
   const paymentsTotal = payments.reduce((s, t) => s + t.amount, 0);
+
+  // Month-over-month spending: net spend (purchases + fees − refunds) per
+  // calendar month for the trailing 12 months, from the first month with data
+  // up to now. Gaps fill as 0; the current (in-progress) month is flagged partial.
+  const monthlySpend = useMemo(() => {
+    const byMonth = new Map<string, number>();
+    for (const t of brandTxns) {
+      if (t.type !== 'expense' && t.type !== 'fee' && t.type !== 'refund') continue;
+      const key = t.date.slice(0, 7); // YYYY-MM
+      byMonth.set(key, (byMonth.get(key) ?? 0) + (t.type === 'refund' ? -t.amount : t.amount));
+    }
+    if (byMonth.size === 0) return [] as { key: string; label: string; total: number; partial: boolean }[];
+    const now = new Date();
+    const curKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const firstKey = [...byMonth.keys()].sort()[0];
+    const out: { key: string; label: string; total: number; partial: boolean }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (key < firstKey) continue; // don't show empty months before any data
+      out.push({
+        key,
+        label: format(d, 'MMM'),
+        total: Math.max(0, Math.round((byMonth.get(key) ?? 0) * 100) / 100),
+        partial: key === curKey,
+      });
+    }
+    return out;
+  }, [brandTxns]);
+  // Trend read on COMPLETE months only (the current month is partial, so comparing
+  // it would falsely look "down"). Average line covers the completed months.
+  const spendInsight = useMemo(() => {
+    const complete = monthlySpend.filter((m) => !m.partial);
+    const avg = complete.length ? complete.reduce((s, m) => s + m.total, 0) / complete.length : 0;
+    if (complete.length < 2) return { avg, momPct: null as number | null, down: false, lastLabel: '', prevLabel: '' };
+    const last = complete[complete.length - 1];
+    const prev = complete[complete.length - 2];
+    const momPct = prev.total > 0 ? Math.round(((last.total - prev.total) / prev.total) * 100) : null;
+    return { avg, momPct, down: last.total < prev.total, lastLabel: last.label, prevLabel: prev.label };
+  }, [monthlySpend]);
 
   // Recurring charges — detected from the FULL history (not the activity window).
   const recurring = useMemo(() => detectRecurring(brandTxns), [brandTxns]);
@@ -918,6 +958,30 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
+
+            {/* Monthly spending trend */}
+            {monthlySpend.length >= 2 && (
+              <div className="bg-card rounded-2xl border border-border p-5">
+                <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+                  <SectionTitle icon={TrendingUp}>Monthly Spending</SectionTitle>
+                  {spendInsight.momPct != null && (
+                    <span className={cn('flex items-center gap-1.5 text-sm font-semibold',
+                      spendInsight.down ? 'text-success' : 'text-destructive')}>
+                      {spendInsight.down ? <TrendingDown className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}
+                      {spendInsight.down ? '↓' : '↑'} {Math.abs(spendInsight.momPct)}%
+                      <span className="text-muted-foreground font-normal">
+                        {spendInsight.lastLabel} vs {spendInsight.prevLabel}
+                      </span>
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Net spend per month (purchases + fees − refunds; excludes card payments & transfers).
+                  {monthlySpend.some((m) => m.partial) && ' Current month is still in progress.'}
+                </p>
+                <MonthlySpendChart data={monthlySpend} average={spendInsight.avg} />
+              </div>
+            )}
 
             {/* Payments + recent transactions */}
             <div className="grid gap-4 lg:grid-cols-2">
@@ -1538,6 +1602,64 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
         </div>
       </div>
     </button>
+  );
+}
+
+type SpendPoint = { key: string; label: string; total: number; partial: boolean };
+
+function SpendTooltip({ active, payload }: { active?: boolean; payload?: { payload: SpendPoint }[] }) {
+  if (!active || !payload?.length) return null;
+  const p = payload[0].payload;
+  return (
+    <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-md text-sm">
+      <p className="font-medium text-card-foreground">{p.label}{p.partial ? ' (so far)' : ''}</p>
+      <p className="text-muted-foreground">{fmtMoney(p.total, { cents: true })} spent</p>
+    </div>
+  );
+}
+
+// Month-over-month spending line. Single series (primary blue) with a soft area
+// wash, a dashed average reference line, a crosshair tooltip, and the in-progress
+// month drawn as a hollow endpoint so a partial month isn't mistaken for a dip.
+function MonthlySpendChart({ data, average }: { data: SpendPoint[]; average: number }) {
+  const lastIdx = data.length - 1;
+  return (
+    <div className="h-60 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 12, right: 16, left: 4, bottom: 0 }}>
+          <defs>
+            <linearGradient id="spendWash" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.14} />
+              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.6} />
+          <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+            axisLine={false} tickLine={false} minTickGap={8} />
+          <YAxis tickFormatter={(v) => fmtCompact(Number(v))} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+            axisLine={false} tickLine={false} width={46} />
+          {average > 0 && (
+            <ReferenceLine y={average} stroke="hsl(var(--muted-foreground))" strokeDasharray="4 4" strokeOpacity={0.7}
+              label={{ value: `avg ${fmtCompact(average)}`, position: 'insideTopRight', fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+          )}
+          <Tooltip content={<SpendTooltip />} cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeDasharray: '3 3' }} />
+          {/* Soft fill under the line for depth (area look, line emphasis). */}
+          <Area type="monotone" dataKey="total" stroke="none" fill="url(#spendWash)" isAnimationActive={false} />
+          <Line type="monotone" dataKey="total" stroke="hsl(var(--primary))" strokeWidth={2.5}
+            dot={(props: { cx?: number; cy?: number; index?: number }) => {
+              const { cx, cy, index } = props;
+              if (cx == null || cy == null) return <g />;
+              const partial = index === lastIdx && data[lastIdx]?.partial;
+              return (
+                <circle key={index} cx={cx} cy={cy} r={partial ? 4 : 3}
+                  fill={partial ? 'hsl(var(--card))' : 'hsl(var(--primary))'}
+                  stroke="hsl(var(--primary))" strokeWidth={2} />
+              );
+            }}
+            activeDot={{ r: 5 }} isAnimationActive={false} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
