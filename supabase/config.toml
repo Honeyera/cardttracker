@@ -26,6 +26,10 @@ verify_jwt = false
 [functions.attention-alert]
 verify_jwt = false
 
+# Called by pg_cron, not a logged-in user; authenticates via CRON_SECRET header.
+[functions.recurring-alert]
+verify_jwt = false
+
 # Email 2FA. login/verify run before a session exists; enroll actions verify the
 # caller's JWT in-code. Must be deployed with JWT enforcement OFF.
 [functions.mfa]
