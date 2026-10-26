@@ -100,14 +100,16 @@ export function detectRecurring(transactions: FinanceTransaction[]): RecurringCh
     const consistent = gaps.filter((g) => Math.abs(g - medGap) <= Math.max(4, medGap * 0.4)).length;
     if (consistent / gaps.length < 0.6) continue;
 
-    // Amount must be consistent (subscriptions are; variable spend isn't).
+    // Amount must be consistent (subscriptions are; variable spend isn't), but
+    // robust to a single outlier — a setup fee or a larger first-month/bundle
+    // charge shouldn't disqualify an otherwise-steady series. So instead of a
+    // coefficient of variation (which one outlier can blow past the cutoff), we
+    // require most charges to cluster near the median amount.
     const amounts = txns.map((t) => t.amount);
     const medAmt = median(amounts);
     if (medAmt <= 0) continue;
-    const mean = amounts.reduce((s, a) => s + a, 0) / amounts.length;
-    const variance = amounts.reduce((s, a) => s + (a - mean) ** 2, 0) / amounts.length;
-    const cv = Math.sqrt(variance) / mean; // coefficient of variation
-    if (cv > 0.35) continue;
+    const nearMedian = amounts.filter((a) => Math.abs(a - medAmt) <= Math.max(2, medAmt * 0.25)).length;
+    if (nearMedian / amounts.length < 0.6) continue;
 
     const first = byDate[0];
     const last = byDate[byDate.length - 1];
