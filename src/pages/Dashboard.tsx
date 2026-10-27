@@ -215,12 +215,14 @@ const Dashboard = () => {
     [cards, accounts],
   );
 
-  // Total paid toward each card's current statement (payments on/after its close
-  // date), from transactions — handles installment payments.
+  // Total applied toward each card's current statement since it closed: payments
+  // PLUS refunds/credits on the card — issuers net credits against what's owed
+  // (e.g. a $7.49 Steam refund covered the tail of an Amex statement), so
+  // counting only payments falsely shows a small remainder "due".
   const paidTowardStatementByCard = useMemo(() => {
     const m = new Map<string, number>();
     for (const t of transactions) {
-      if (t.type !== 'payment' || !t.creditCardId) continue;
+      if ((t.type !== 'payment' && t.type !== 'refund') || !t.creditCardId) continue;
       const card = cards.find((c) => c.id === t.creditCardId);
       if (card?.lastStatementDate && t.date >= card.lastStatementDate) {
         m.set(t.creditCardId, (m.get(t.creditCardId) ?? 0) + t.amount);
