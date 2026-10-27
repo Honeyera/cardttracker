@@ -38,6 +38,14 @@ const fmtMoney = (n: number, opts: { cents?: boolean } = {}) =>
 // the card dialog.
 const fmtCompact = (n: number) => (n >= 1000 ? `$${Math.round(n / 1000)}k` : fmtMoney(n));
 
+// Owner-specific: 0% balance-transfer promos to track payoff before the rate
+// jumps. Keyed by card last-four; endDate ISO; goToApr is the % after the promo.
+// The transferred principal is auto-detected from the card's "balance transfer"
+// transactions, so only the promo terms live here.
+const BT_PROMOS: { last4: string; endDate: string; goToApr: number }[] = [
+  { last4: '6125', endDate: '2027-06-30', goToApr: 18 }, // BofA Cash Card
+];
+
 const fmtDate = (iso: string | null) => {
   if (!iso) return '—';
   try { return format(parseISO(iso), 'MMM d, yyyy'); } catch { return iso; }
@@ -412,6 +420,35 @@ const Dashboard = () => {
   // Recurring charges — detected from the FULL history (not the activity window).
   const recurring = useMemo(() => detectRecurring(brandTxns), [brandTxns]);
   const recurringMonthly = recurring.reduce((s, r) => s + r.monthlyEquivalent, 0);
+
+  // 0% balance-transfer promo payoff tracker (per BT_PROMOS). Tracks the
+  // transferred balance specifically: principal auto-detected from the card's
+  // "balance transfer" charges, minus payments made since the transfer.
+  const btPromos = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const threeMoAgo = new Date(today.getFullYear(), today.getMonth() - 3, today.getDate()).toISOString().slice(0, 10);
+    return BT_PROMOS.flatMap((cfg) => {
+      const card = cards.find((c) => c.lastFour === cfg.last4);
+      if (!card) return [];
+      const isBT = (t: FinanceTransaction) => /balance\s*transfer/i.test(`${t.description} ${t.merchantName ?? ''}`);
+      const btTxns = transactions.filter((t) => t.creditCardId === card.id && isBT(t));
+      if (btTxns.length === 0) return [];
+      const original = Math.round(btTxns.reduce((s, t) => s + Math.abs(t.amount), 0) * 100) / 100;
+      const transferDate = btTxns.map((t) => t.date).sort()[0];
+      const pays = transactions.filter((t) => t.creditCardId === card.id && t.type === 'payment' && t.date >= transferDate);
+      const paid = pays.reduce((s, t) => s + t.amount, 0);
+      const remaining = Math.max(0, Math.round((original - paid) * 100) / 100);
+      const end = new Date(`${cfg.endDate}T00:00:00`);
+      const daysLeft = Math.round((end.getTime() - today.getTime()) / 86_400_000);
+      const monthsLeft = Math.max(0, daysLeft / 30.44);
+      const requiredMonthly = monthsLeft > 0.1 ? remaining / monthsLeft : remaining;
+      const recentPace = pays.filter((t) => t.date >= threeMoAgo).reduce((s, t) => s + t.amount, 0) / 3;
+      const projShortfall = Math.max(0, Math.round((remaining - recentPace * monthsLeft) * 100) / 100);
+      const onTrack = remaining <= 0.005 || recentPace + 0.005 >= requiredMonthly;
+      const interestIfMissed = Math.round(projShortfall * (cfg.goToApr / 100));
+      return [{ card, cfg, original, paid, remaining, daysLeft, requiredMonthly, recentPace, onTrack, projShortfall, interestIfMissed }];
+    });
+  }, [cards, transactions]);
   const recurringYearly = recurringMonthly * 12;
   // Show most-recently-charged first ("latest on top"), by last charge date.
   const recurringSorted = useMemo(
@@ -878,6 +915,48 @@ const Dashboard = () => {
               <Kpi label="Credit Available" value={fmtMoney(creditAvailable)} icon={Percent} tone="primary"
                    sub={`across ${visibleCards.length} ${visibleCards.length === 1 ? 'card' : 'cards'}`} />
             </div>
+
+            {/* 0% balance-transfer promo payoff tracker */}
+            {btPromos.filter((p) => p.remaining > 0.005).map((p) => (
+              <div key={p.card.id} className={cn('rounded-2xl border bg-card p-5 shadow-sm',
+                p.daysLeft <= 90 || !p.onTrack ? 'border-warning/40' : 'border-border')}>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <SectionTitle icon={Percent}>0% Balance Transfer · {p.card.name} ••{p.card.lastFour}</SectionTitle>
+                  <span className={cn('text-sm font-semibold', p.daysLeft <= 90 ? 'text-warning' : 'text-muted-foreground')}>
+                    0% ends {fmtDate(p.cfg.endDate)} · {p.daysLeft >= 0 ? `${p.daysLeft} days left` : 'ended'}
+                  </span>
+                </div>
+                <div className="grid gap-5 lg:grid-cols-[1.3fr_1fr] mt-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Transfer balance remaining</p>
+                    <p className="text-3xl font-bold tracking-tight tabular-nums">{fmtMoney(p.remaining)}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Paid {fmtMoney(p.paid)} of {fmtMoney(p.original)} transferred</p>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden mt-3">
+                      <div className="h-full rounded-full bg-success" style={{ width: `${Math.min(100, Math.max(2, (p.paid / p.original) * 100))}%` }} />
+                    </div>
+                  </div>
+                  <div className="lg:border-l lg:border-border lg:pl-5 space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Pay to clear in time</span>
+                      <span className="font-semibold tabular-nums">{fmtMoney(p.requiredMonthly)}/mo</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Your recent pace</span>
+                      <span className="font-semibold tabular-nums">{fmtMoney(p.recentPace)}/mo</span>
+                    </div>
+                    <div className={cn('mt-2 rounded-lg p-2.5 flex items-start gap-2 font-medium',
+                      p.onTrack ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive')}>
+                      {p.onTrack ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" /> : <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />}
+                      <span>
+                        {p.onTrack
+                          ? 'On track to clear the 0% balance before the rate jumps.'
+                          : `Behind: at ${fmtMoney(p.recentPace)}/mo you'll still owe ~${fmtMoney(p.projShortfall)} when 0% ends — then ${p.cfg.goToApr}% APR (~${fmtMoney(p.interestIfMissed)}/yr) starts. Pay ${fmtMoney(p.requiredMonthly)}/mo to beat it.`}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
 
             {/* Bank accounts — prominent, on top */}
             <div>
