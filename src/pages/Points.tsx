@@ -478,7 +478,7 @@ export default function Points() {
                 <Trophy className="w-5 h-5 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-foreground">CardTrack Points</h1>
+                <h1 className="text-xl font-bold text-foreground">Personal Finance Tracker — Points</h1>
                 <p className="text-xs text-muted-foreground">Track reward points redeemed</p>
               </div>
             </Link>

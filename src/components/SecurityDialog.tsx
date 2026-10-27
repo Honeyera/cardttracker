@@ -50,7 +50,7 @@ export function SecurityDialog({ open, onOpenChange }: SecurityDialogProps) {
       const { data, error } = await supabase.auth.mfa.enroll({
         factorType: 'totp',
         friendlyName: `Authenticator ${Date.now()}`,
-        issuer: 'CardTrack (cards.vowideas.com)',
+        issuer: 'Personal Finance Tracker (cards.vowideas.com)',
       });
       if (error) throw error;
       setEnroll({ factorId: data.id, qr: data.totp.qr_code, secret: data.totp.secret });

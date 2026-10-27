@@ -150,7 +150,7 @@ const Index = () => {
               <Wallet className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">CardTrack</h1>
+              <h1 className="text-xl font-bold text-foreground">Personal Finance Tracker</h1>
               <p className="text-xs text-muted-foreground">
                 Never miss a payment
               </p>

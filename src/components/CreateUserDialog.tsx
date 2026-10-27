@@ -74,7 +74,7 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
         <DialogHeader>
           <DialogTitle>Create User</DialogTitle>
           <DialogDescription>
-            Create a new account that can sign in to CardTrack.
+            Create a new account that can sign in to Personal Finance Tracker.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">

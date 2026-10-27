@@ -115,7 +115,7 @@ const Auth = () => {
           <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center mx-auto mb-4">
             <Wallet className="w-6 h-6 text-primary-foreground" />
           </div>
-          <CardTitle className="text-2xl">CardTrack</CardTitle>
+          <CardTitle className="text-2xl">Personal Finance Tracker</CardTitle>
           <CardDescription>
             Sign in to your account
           </CardDescription>
