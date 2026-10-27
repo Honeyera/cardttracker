@@ -392,7 +392,9 @@ const Dashboard = () => {
     const txns = brandTxns.filter((t) => t.accountId && propertyAccountIds.has(t.accountId)
       && (!activityFrom || t.date >= activityFrom));
     const sum = (pred: (t: FinanceTransaction) => boolean) => txns.filter(pred).reduce((s, t) => s + t.amount, 0);
-    const income = sum((t) => t.type === 'income');
+    // Rent arrives as standard deposits (income) AND via Zelle / bank transfers
+    // (type 'transfer' with a transfer_IN category) — count both as rent.
+    const income = sum((t) => t.type === 'income' || (t.type === 'transfer' && (t.category ?? '').startsWith('transfer_in')));
     const refunds = sum((t) => t.type === 'refund');
     const costs = sum((t) => t.type === 'expense' || t.type === 'fee' || t.type === 'payment') - refunds;
     return { income, costs, net: income - costs, count: txns.length };
@@ -1190,8 +1192,9 @@ const Dashboard = () => {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Cash flow through your TD account — rent in vs property costs out (incl. mortgage/loan payments).
-                  Kept separate from personal spending &amp; income.
+                  TD account cash flow — rent in (incl. Zelle &amp; bank transfers) vs property costs out
+                  (ACH/card charges &amp; mortgage). Note: money you send via Zelle isn't auto-categorized, so
+                  costs can run low — review the list below. Kept separate from personal spending &amp; income.
                 </p>
                 <div className="grid gap-3 sm:grid-cols-3 mt-3">
                   <Flow label="Rent / income in" value={propertyFlow.income} icon={ArrowDownRight} tone="success" />
