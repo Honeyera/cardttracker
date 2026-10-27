@@ -1153,7 +1153,7 @@ const Dashboard = () => {
                 {recentTxns.length === 0 ? (
                   <Empty>No transactions synced yet.</Empty>
                 ) : (
-                  <div className="space-y-2 mt-3 max-h-96 overflow-y-auto -mx-1 px-1">
+                  <div className="space-y-2 mt-3 max-h-96 overflow-y-auto overflow-x-hidden -mx-2 px-2">
                     {recentTxns.slice(0, 50).map((t) => (
                       <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)} />
                     ))}
