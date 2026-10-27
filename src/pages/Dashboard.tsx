@@ -384,6 +384,12 @@ const Dashboard = () => {
     );
     refreshFinance();
   };
+  // Remove a tag rule — reverts that payee to the default (account-based).
+  const removeMerchantTag = async (key: string) => {
+    if (!user || !key) return;
+    await (supabase as any).from('merchant_tags').delete().eq('user_id', user.id).eq('merchant_key', key);
+    refreshFinance();
+  };
 
   const activityFrom = activityPeriod === 'month' ? isoMonthStart()
     : activityPeriod === '30d' ? isoDaysAgo(30)
@@ -1244,6 +1250,37 @@ const Dashboard = () => {
                         property={isProperty(t)}
                         onSetTag={(tag) => setMerchantTag(merchantKey(t), tag)} />
                     ))}
+                  </div>
+                )}
+
+                {/* Tag manager — review/correct every payee you've tagged (incl.
+                    ones now hidden from this list because you marked them Personal). */}
+                {merchantTags.size > 0 && (
+                  <div className="mt-5 border-t border-border pt-4">
+                    <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground mb-2">
+                      Your tags ({merchantTags.size})
+                    </p>
+                    <div className="space-y-1.5 max-h-80 overflow-y-auto overflow-x-hidden -mx-1 px-1">
+                      {[...merchantTags.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([key, tag]) => (
+                        <div key={key} className="flex items-center justify-between gap-3 py-1 border-b border-border/50 last:border-0">
+                          <span className="text-sm truncate capitalize min-w-0">{key}</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <div className="inline-flex rounded-full border border-border overflow-hidden text-[10px] font-semibold">
+                              <button type="button" onClick={() => setMerchantTag(key, 'personal')}
+                                className={cn('px-2 py-0.5 transition-colors', tag === 'personal' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>
+                                Personal
+                              </button>
+                              <button type="button" onClick={() => setMerchantTag(key, 'property')}
+                                className={cn('px-2 py-0.5 border-l border-border transition-colors', tag === 'property' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>
+                                Property
+                              </button>
+                            </div>
+                            <button type="button" onClick={() => removeMerchantTag(key)} title="Remove rule (revert to default)"
+                              className="text-muted-foreground hover:text-destructive text-sm leading-none px-1">✕</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
