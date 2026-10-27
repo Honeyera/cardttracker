@@ -398,6 +398,16 @@ const Dashboard = () => {
     return { income, costs, net: income - costs, count: txns.length };
   }, [brandTxns, propertyAccountIds, activityFrom]);
 
+  // The property account's own transactions (within the selected period), newest
+  // first — listed under the Properties tab so you can see the rental activity.
+  const propertyTxns = useMemo(
+    () => brandTxns
+      .filter((t) => t.accountId && propertyAccountIds.has(t.accountId) && (!activityFrom || t.date >= activityFrom))
+      .slice()
+      .sort((a, b) => ((a.createdAt ?? a.date) < (b.createdAt ?? b.date) ? 1 : -1)),
+    [brandTxns, propertyAccountIds, activityFrom],
+  );
+
   // Month-over-month spending: net spend (purchases + fees − refunds) per
   // calendar month for the trailing 12 months, from the first month with data
   // up to now. Gaps fill as 0; the current (in-progress) month is flagged partial.
@@ -1193,6 +1203,16 @@ const Dashboard = () => {
                     </span>
                   </div>
                 </div>
+                <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground mt-5 mb-2">Property transactions</p>
+                {propertyTxns.length === 0 ? (
+                  <Empty>No property transactions in this period.</Empty>
+                ) : (
+                  <div className="space-y-2 max-h-96 overflow-y-auto overflow-x-hidden -mx-2 px-2">
+                    {propertyTxns.slice(0, 100).map((t) => (
+                      <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)} />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
