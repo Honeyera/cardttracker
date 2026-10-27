@@ -1294,9 +1294,11 @@ const Dashboard = () => {
                 {payments.length === 0 ? (
                   <Empty>No card payments in the synced period.</Empty>
                 ) : (
-                  <div className="space-y-2 mt-3">
-                    {payments.slice(0, 8).map((t) => (
-                      <TxnRow key={t.id} txn={t} source={paymentDestCard(t) ? `→ ${paymentDestCard(t)}` : sourceOf(t)} />
+                  <div className="space-y-2 mt-3 max-h-96 overflow-y-auto overflow-x-hidden -mx-2 px-2">
+                    {payments.slice(0, 50).map((t) => (
+                      <TxnRow key={t.id} txn={t} source={paymentDestCard(t) ? `→ ${paymentDestCard(t)}` : sourceOf(t)}
+                        property={isProperty(t)}
+                        onSetTag={(tag) => setMerchantTag(merchantKey(t), tag)} />
                     ))}
                   </div>
                 )}
