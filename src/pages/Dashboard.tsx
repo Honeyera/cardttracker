@@ -1279,8 +1279,8 @@ function AccountTile({ account, history, onClick }: {
             ? <img src={account.logoUrl} alt="" className="w-full h-full object-contain" />
             : <Landmark className="w-4 h-4" />}
         </div>
-        <p className="font-semibold text-sm truncate flex-1 min-w-0">{account.name}</p>
-        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+        <p className="font-semibold text-sm leading-tight line-clamp-2 flex-1 min-w-0">{account.name}</p>
+        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
       </div>
       <p className="text-xs text-muted-foreground truncate mb-1.5">
         {account.institution ?? 'Bank'}
@@ -1290,7 +1290,9 @@ function AccountTile({ account, history, onClick }: {
       <p className="text-2xl font-bold text-card-foreground truncate">{fmtMoney(account.availableBalance, { cents: true })}</p>
       <div className="flex items-end justify-between gap-2 mt-1">
         <p className="text-xs text-muted-foreground truncate">
-          available · {fmtMoney(account.currentBalance)} posted
+          {Math.abs(account.availableBalance - account.currentBalance) > 0.005
+            ? `Posted ${fmtMoney(account.currentBalance)}`
+            : 'Available balance'}
         </p>
         {history.length > 1 && <Sparkline data={history} />}
       </div>
