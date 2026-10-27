@@ -676,9 +676,6 @@ const Dashboard = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" asChild>
-              <Link to="/dashboard"><LayoutDashboard className="w-4 h-4 mr-1" />Dashboard</Link>
-            </Button>
             <Button size="sm" variant="outline" className="w-9 px-0" aria-label="Toggle dark mode"
               title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
               onClick={() => setTheme(isDark ? 'light' : 'dark')}>
