@@ -436,8 +436,12 @@ const Dashboard = () => {
       const original = Math.round(btTxns.reduce((s, t) => s + Math.abs(t.amount), 0) * 100) / 100;
       const transferDate = btTxns.map((t) => t.date).sort()[0];
       const pays = transactions.filter((t) => t.creditCardId === card.id && t.type === 'payment' && t.date >= transferDate);
-      const paid = pays.reduce((s, t) => s + t.amount, 0);
-      const remaining = Math.max(0, Math.round((original - paid) * 100) / 100);
+      // Remaining on the transfer = the card's LIVE balance (authoritative from
+      // Plaid), capped at the amount transferred. Paid is derived from that, so
+      // the figure always matches the real card balance rather than drifting
+      // from imperfectly-matched payment history.
+      const remaining = Math.max(0, Math.min(original, Math.round(card.currentBalance * 100) / 100));
+      const paid = Math.max(0, Math.round((original - remaining) * 100) / 100);
       const end = new Date(`${cfg.endDate}T00:00:00`);
       const daysLeft = Math.round((end.getTime() - today.getTime()) / 86_400_000);
       const monthsLeft = Math.max(0, daysLeft / 30.44);
