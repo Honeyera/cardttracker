@@ -1242,7 +1242,7 @@ const Dashboard = () => {
                     {propertyTxns.slice(0, 100).map((t) => (
                       <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)}
                         property={isProperty(t)}
-                        onToggleProperty={() => setMerchantTag(merchantKey(t), isProperty(t) ? 'personal' : 'property')} />
+                        onSetTag={(tag) => setMerchantTag(merchantKey(t), tag)} />
                     ))}
                   </div>
                 )}
@@ -1273,7 +1273,7 @@ const Dashboard = () => {
                     {recentTxns.slice(0, 50).map((t) => (
                       <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)}
                         property={isProperty(t)}
-                        onToggleProperty={() => setMerchantTag(merchantKey(t), isProperty(t) ? 'personal' : 'property')} />
+                        onSetTag={(tag) => setMerchantTag(merchantKey(t), tag)} />
                     ))}
                   </div>
                 )}
@@ -2237,9 +2237,9 @@ function payeeAndVia(rawName: string, proc: string | null): { name: string; show
   return { name: cleaned, showVia: true };
 }
 
-function TxnRow({ txn, source, isNew, property, onToggleProperty }: {
+function TxnRow({ txn, source, isNew, property, onSetTag }: {
   txn: FinanceTransaction; source?: string | null; isNew?: boolean;
-  property?: boolean; onToggleProperty?: () => void;
+  property?: boolean; onSetTag?: (tag: 'personal' | 'property') => void;
 }) {
   const inflow = txn.type === 'income' || txn.type === 'refund';
   const isPayment = txn.type === 'payment';
@@ -2270,13 +2270,18 @@ function TxnRow({ txn, source, isNew, property, onToggleProperty }: {
         </div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        {onToggleProperty && (
-          <button type="button" onClick={(e) => { e.stopPropagation(); onToggleProperty(); }}
-            title="Toggle Personal / Property — applies to all charges from this payee"
-            className={cn('text-[10px] font-semibold rounded-full border px-2 py-0.5 whitespace-nowrap transition-colors',
-              property ? 'bg-primary/10 text-primary border-primary/30' : 'bg-muted text-muted-foreground border-transparent hover:border-border')}>
-            {property ? 'Property' : 'Personal'}
-          </button>
+        {onSetTag && (
+          <div className="inline-flex rounded-full border border-border overflow-hidden text-[10px] font-semibold shrink-0"
+            title="Tag this payee — applies to all its charges, past & future">
+            <button type="button" onClick={(e) => { e.stopPropagation(); onSetTag('personal'); }}
+              className={cn('px-2 py-0.5 transition-colors', !property ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>
+              Personal
+            </button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); onSetTag('property'); }}
+              className={cn('px-2 py-0.5 border-l border-border transition-colors', property ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>
+              Property
+            </button>
+          </div>
         )}
         <span className={cn('font-semibold tabular-nums text-right whitespace-nowrap', inflow ? 'text-success' : 'text-foreground')}>
           {inflow ? '+' : isPayment ? '' : '−'}{fmtMoney(txn.amount, { cents: true })}
