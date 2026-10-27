@@ -46,6 +46,12 @@ const BT_PROMOS: { last4: string; endDate: string; goToApr: number }[] = [
   { last4: '6125', endDate: '2027-06-30', goToApr: 18 }, // BofA Cash Card
 ];
 
+// Owner-specific: fix recurring-charge labels where Plaid's merchant guess is
+// wrong. Keyed by the detected (title-cased) label, lowercased.
+const RECURRING_LABEL_OVERRIDES: Record<string, string> = {
+  'briarwood college': 'Briarwood West HOA', // really an HOA fee (bank text "BRIARWOOD WEST", cat=rent)
+};
+
 const fmtDate = (iso: string | null) => {
   if (!iso) return '—';
   try { return format(parseISO(iso), 'MMM d, yyyy'); } catch { return iso; }
@@ -1108,7 +1114,7 @@ const Dashboard = () => {
                       <div key={r.key} className="flex items-center justify-between gap-3 py-1.5 border-b border-border/50 last:border-0">
                         <div className="min-w-0">
                           <p className="font-medium truncate flex items-center gap-2">
-                            {r.label}
+                            {RECURRING_LABEL_OVERRIDES[r.label.toLowerCase()] ?? r.label}
                             {r.possible && (
                               <span className="text-[10px] font-semibold uppercase tracking-wide rounded-full bg-warning/15 text-warning border border-warning/30 px-1.5 py-0.5 whitespace-nowrap">
                                 possible

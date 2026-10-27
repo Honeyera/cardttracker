@@ -104,12 +104,16 @@ export function detectRecurring(transactions: FinanceTransaction[]): RecurringCh
     const consistent = gaps.filter((g) => Math.abs(g - medGap) <= Math.max(4, medGap * 0.4)).length;
     if (consistent / gaps.length < 0.6) continue;
 
+    // Per-OCCURRENCE amount = the sum of charges on the same day. Some bills post
+    // as several same-day charges (multiple units / split payments), so one $825
+    // monthly bill can arrive as 3×$275 — we want the $825, not $275.
+    const dayTotalMap = new Map<string, number>();
+    for (const t of txns) dayTotalMap.set(t.date, (dayTotalMap.get(t.date) ?? 0) + t.amount);
+    const amounts = [...dayTotalMap.values()];
     // Amount must be consistent (subscriptions are; variable spend isn't), but
-    // robust to a single outlier — a setup fee or a larger first-month/bundle
-    // charge shouldn't disqualify an otherwise-steady series. So instead of a
-    // coefficient of variation (which one outlier can blow past the cutoff), we
-    // require most charges to cluster near the median amount.
-    const amounts = txns.map((t) => t.amount);
+    // robust to a single outlier — a setup/first-month charge shouldn't disqualify
+    // an otherwise-steady series — so we require most occurrences to cluster near
+    // the median rather than using an outlier-sensitive coefficient of variation.
     const medAmt = median(amounts);
     if (medAmt <= 0) continue;
     const nearMedian = amounts.filter((a) => Math.abs(a - medAmt) <= Math.max(2, medAmt * 0.25)).length;
@@ -134,7 +138,7 @@ export function detectRecurring(transactions: FinanceTransaction[]): RecurringCh
       label: titleCase((last.merchantName || last.description || 'Charge').toLowerCase()).slice(0, 48),
       cadence,
       typicalAmount: medAmt,
-      count: txns.length,
+      count: byDate.length,
       firstDate: first.date,
       lastDate: last.date,
       nextExpectedDate: addDays(last.date, Math.round(medGap)),
