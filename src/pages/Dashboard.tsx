@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import { useTheme } from 'next-themes';
@@ -51,6 +51,18 @@ const BT_PROMOS: { last4: string; endDate: string; goToApr: number }[] = [
 const RECURRING_LABEL_OVERRIDES: Record<string, string> = {
   'briarwood college': 'Briarwood West HOA', // really an HOA fee (bank text "BRIARWOOD WEST", cat=rent)
 };
+
+// Stable merchant/payee key for Personal/Property tagging: prefer the merchant
+// name; for Zelle, the payee after the last "zelle"; else a cleaned description.
+// So a tag on one transaction applies to every charge from that payee.
+function merchantKey(t: { merchantName: string | null; description: string }): string {
+  const name = (t.merchantName ?? '').trim().toLowerCase();
+  if (name) return name;
+  let d = (t.description ?? '').toLowerCase();
+  const zi = d.lastIndexOf('zelle ');
+  if (zi >= 0) d = d.slice(zi + 6);
+  return d.replace(/\*.*/, ' ').replace(/[#\d]{2,}/g, ' ').replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40);
+}
 
 const fmtDate = (iso: string | null) => {
   if (!iso) return '—';
@@ -233,7 +245,7 @@ const Dashboard = () => {
     await (supabase as any).from('accounts').update({ display_name: value }).eq('id', id);
     refreshFinance();
   };
-  const { accounts, transactions, cards, alerts, forecast, snapshots, availablePoints, loading, lastSyncedAt } = useFinanceData();
+  const { accounts, transactions, cards, alerts, forecast, snapshots, availablePoints, merchantTags, loading, lastSyncedAt } = useFinanceData();
   const [company, setCompany] = useState('all');
   const [selectedCard, setSelectedCard] = useState<FinanceCard | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<FinanceAccount | null>(null);
@@ -350,18 +362,36 @@ const Dashboard = () => {
   // and property costs there are NOT personal income/spend — they're shown
   // separately in the Properties tab and excluded from the personal figures.
   const propertyAccountIds = useMemo(() => {
-    const propLast4 = new Set(['5097']); // TD Personal CHK — rentals
+    const propLast4 = new Set(['5097']); // TD Personal CHK — rentals (default bucket)
     return new Set(accounts.filter((a) => a.lastFour && propLast4.has(a.lastFour)).map((a) => a.id));
   }, [accounts]);
+
+  // Is a transaction investment/property vs personal? A per-merchant tag wins
+  // (remembered across syncs/months); otherwise the default is account-based
+  // (TD = property, everything else = personal).
+  const isProperty = useCallback((t: FinanceTransaction): boolean => {
+    const tag = merchantTags.get(merchantKey(t));
+    if (tag) return tag === 'property';
+    return !!(t.accountId && propertyAccountIds.has(t.accountId));
+  }, [merchantTags, propertyAccountIds]);
+
+  // Tag a merchant/payee Personal or Property — applies to all of its transactions.
+  const setMerchantTag = async (key: string, tag: 'personal' | 'property') => {
+    if (!user || !key) return;
+    await (supabase as any).from('merchant_tags').upsert(
+      { user_id: user.id, merchant_key: key, tag, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,merchant_key' },
+    );
+    refreshFinance();
+  };
 
   const activityFrom = activityPeriod === 'month' ? isoMonthStart()
     : activityPeriod === '30d' ? isoDaysAgo(30)
     : activityPeriod === '90d' ? isoDaysAgo(90)
     : activityPeriod === 'ytd' ? isoYearStart() : '';
   const activityTxns = useMemo(
-    () => brandTxns.filter((t) => (!activityFrom || t.date >= activityFrom)
-      && !(t.accountId && propertyAccountIds.has(t.accountId))),
-    [brandTxns, activityFrom, propertyAccountIds],
+    () => brandTxns.filter((t) => (!activityFrom || t.date >= activityFrom) && !isProperty(t)),
+    [brandTxns, activityFrom, isProperty],
   );
   // Income = real deposits only (refunds are money-back on purchases, not revenue).
   // Spending = purchases + fees, net of refunds (a refund reverses a purchase).
@@ -389,8 +419,7 @@ const Dashboard = () => {
   // rent/income IN vs property costs OUT (expenses, fees, mortgage/loan payments).
   // Transfers to/from personal are excluded (own-money moves, not cash flow).
   const propertyFlow = useMemo(() => {
-    const txns = brandTxns.filter((t) => t.accountId && propertyAccountIds.has(t.accountId)
-      && (!activityFrom || t.date >= activityFrom));
+    const txns = brandTxns.filter((t) => isProperty(t) && (!activityFrom || t.date >= activityFrom));
     const sum = (pred: (t: FinanceTransaction) => boolean) => txns.filter(pred).reduce((s, t) => s + t.amount, 0);
     // Rent arrives as standard deposits (income) AND via Zelle / bank transfers
     // (type 'transfer' with a transfer_IN category) — count both as rent.
@@ -398,34 +427,33 @@ const Dashboard = () => {
     const refunds = sum((t) => t.type === 'refund');
     const costs = sum((t) => t.type === 'expense' || t.type === 'fee' || t.type === 'payment') - refunds;
     return { income, costs, net: income - costs, count: txns.length };
-  }, [brandTxns, propertyAccountIds, activityFrom]);
+  }, [brandTxns, isProperty, activityFrom]);
 
   // The property account's own transactions (within the selected period), newest
   // first — listed under the Properties tab so you can see the rental activity.
   const propertyTxns = useMemo(
     () => brandTxns
-      .filter((t) => t.accountId && propertyAccountIds.has(t.accountId) && (!activityFrom || t.date >= activityFrom))
+      .filter((t) => isProperty(t) && (!activityFrom || t.date >= activityFrom))
       .slice()
       .sort((a, b) => ((a.createdAt ?? a.date) < (b.createdAt ?? b.date) ? 1 : -1)),
-    [brandTxns, propertyAccountIds, activityFrom],
+    [brandTxns, isProperty, activityFrom],
   );
 
   // Month-over-month spending: net spend (purchases + fees − refunds) per
   // calendar month for the trailing 12 months, from the first month with data
   // up to now. Gaps fill as 0; the current (in-progress) month is flagged partial.
-  // Accounts kept OUT of Monthly Spending: Michael's CHK ('0015', not mine) plus
-  // the property account (its costs live under Properties, not personal spend).
-  const spendExcludedAccountIds = useMemo(() => {
-    const ids = new Set(accounts.filter((a) => a.lastFour === '0015').map((a) => a.id));
-    propertyAccountIds.forEach((id) => ids.add(id));
-    return ids;
-  }, [accounts, propertyAccountIds]);
+  // Michael's CHK ('0015') is excluded from the Monthly Spending chart only (not
+  // mine). Property is handled separately via isProperty (tag-aware).
+  const michaelAccountIds = useMemo(
+    () => new Set(accounts.filter((a) => a.lastFour === '0015').map((a) => a.id)),
+    [accounts],
+  );
 
   const monthlySpend = useMemo(() => {
     const byMonth = new Map<string, number>();
     for (const t of brandTxns) {
       if (t.type !== 'expense' && t.type !== 'fee' && t.type !== 'refund') continue;
-      if (t.accountId && spendExcludedAccountIds.has(t.accountId)) continue;
+      if ((t.accountId && michaelAccountIds.has(t.accountId)) || isProperty(t)) continue;
       const key = t.date.slice(0, 7); // YYYY-MM
       byMonth.set(key, (byMonth.get(key) ?? 0) + (t.type === 'refund' ? -t.amount : t.amount));
     }
@@ -446,7 +474,7 @@ const Dashboard = () => {
       });
     }
     return out;
-  }, [brandTxns, spendExcludedAccountIds]);
+  }, [brandTxns, michaelAccountIds, isProperty]);
   // Trend read on COMPLETE months only (the current month is partial, so comparing
   // it would falsely look "down"). Average line covers the completed months.
   const spendInsight = useMemo(() => {
@@ -463,8 +491,8 @@ const Dashboard = () => {
   // Property-account (TD) charges are excluded: those are rental costs, shown in
   // the Properties tab, not personal subscriptions.
   const recurring = useMemo(
-    () => detectRecurring(brandTxns.filter((t) => !(t.accountId && propertyAccountIds.has(t.accountId)))),
-    [brandTxns, propertyAccountIds],
+    () => detectRecurring(brandTxns.filter((t) => !isProperty(t))),
+    [brandTxns, isProperty],
   );
   const recurringMonthly = recurring.reduce((s, r) => s + r.monthlyEquivalent, 0);
 
@@ -568,7 +596,7 @@ const Dashboard = () => {
   const monthBreakdown = useMemo(() => {
     if (!selectedMonth) return null;
     const inMonth = (t: FinanceTransaction) =>
-      t.date.slice(0, 7) === selectedMonth && !(t.accountId && spendExcludedAccountIds.has(t.accountId));
+      t.date.slice(0, 7) === selectedMonth && !(t.accountId && michaelAccountIds.has(t.accountId)) && !isProperty(t);
     const txns = [
       ...brandTxns.filter((t) => inMonth(t) && (t.type === 'expense' || t.type === 'fee')),
       ...brandTxns.filter((t) => inMonth(t) && t.type === 'refund').map((t) => ({ ...t, amount: -t.amount })),
@@ -582,7 +610,7 @@ const Dashboard = () => {
       txns,
       period: label,
     };
-  }, [selectedMonth, brandTxns, spendExcludedAccountIds]);
+  }, [selectedMonth, brandTxns, michaelAccountIds, isProperty]);
 
   // Cards needing attention: overdue, or due within 7 days with a balance owed.
   const attentionCards = useMemo(
@@ -1212,7 +1240,9 @@ const Dashboard = () => {
                 ) : (
                   <div className="space-y-2 max-h-96 overflow-y-auto overflow-x-hidden -mx-2 px-2">
                     {propertyTxns.slice(0, 100).map((t) => (
-                      <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)} />
+                      <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)}
+                        property={isProperty(t)}
+                        onToggleProperty={() => setMerchantTag(merchantKey(t), isProperty(t) ? 'personal' : 'property')} />
                     ))}
                   </div>
                 )}
@@ -1241,7 +1271,9 @@ const Dashboard = () => {
                 ) : (
                   <div className="space-y-2 mt-3 max-h-96 overflow-y-auto overflow-x-hidden -mx-2 px-2">
                     {recentTxns.slice(0, 50).map((t) => (
-                      <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)} />
+                      <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)}
+                        property={isProperty(t)}
+                        onToggleProperty={() => setMerchantTag(merchantKey(t), isProperty(t) ? 'personal' : 'property')} />
                     ))}
                   </div>
                 )}
@@ -2205,7 +2237,10 @@ function payeeAndVia(rawName: string, proc: string | null): { name: string; show
   return { name: cleaned, showVia: true };
 }
 
-function TxnRow({ txn, source, isNew }: { txn: FinanceTransaction; source?: string | null; isNew?: boolean }) {
+function TxnRow({ txn, source, isNew, property, onToggleProperty }: {
+  txn: FinanceTransaction; source?: string | null; isNew?: boolean;
+  property?: boolean; onToggleProperty?: () => void;
+}) {
   const inflow = txn.type === 'income' || txn.type === 'refund';
   const isPayment = txn.type === 'payment';
   // Show the raw description exactly as the bank/Amex statement does — no stripping.
@@ -2234,9 +2269,19 @@ function TxnRow({ txn, source, isNew }: { txn: FinanceTransaction; source?: stri
           </p>
         </div>
       </div>
-      <span className={cn('font-semibold shrink-0 tabular-nums text-right whitespace-nowrap', inflow ? 'text-success' : 'text-foreground')}>
-        {inflow ? '+' : isPayment ? '' : '−'}{fmtMoney(txn.amount, { cents: true })}
-      </span>
+      <div className="flex items-center gap-2 shrink-0">
+        {onToggleProperty && (
+          <button type="button" onClick={(e) => { e.stopPropagation(); onToggleProperty(); }}
+            title="Toggle Personal / Property — applies to all charges from this payee"
+            className={cn('text-[10px] font-semibold rounded-full border px-2 py-0.5 whitespace-nowrap transition-colors',
+              property ? 'bg-primary/10 text-primary border-primary/30' : 'bg-muted text-muted-foreground border-transparent hover:border-border')}>
+            {property ? 'Property' : 'Personal'}
+          </button>
+        )}
+        <span className={cn('font-semibold tabular-nums text-right whitespace-nowrap', inflow ? 'text-success' : 'text-foreground')}>
+          {inflow ? '+' : isPayment ? '' : '−'}{fmtMoney(txn.amount, { cents: true })}
+        </span>
+      </div>
     </div>
   );
 }

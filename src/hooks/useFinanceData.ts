@@ -326,6 +326,19 @@ export function useFinanceData() {
     },
   });
 
+  // Personal/Property tags, keyed by normalized merchant/payee. Applies to all
+  // transactions from that merchant, so the rule persists across syncs/months.
+  const merchantTagsQuery = useQuery({
+    queryKey: ['finance', 'merchant_tags', user?.id],
+    enabled: !!user,
+    queryFn: async (): Promise<Map<string, 'personal' | 'property'>> => {
+      const { data, error } = await db.from('merchant_tags').select('merchant_key, tag');
+      // Table may not exist yet (before the one-time migration) — degrade to no tags.
+      if (error) return new Map<string, 'personal' | 'property'>();
+      return new Map((data ?? []).map((r: any) => [r.merchant_key as string, r.tag as 'personal' | 'property']));
+    },
+  });
+
   return {
     accounts: accountsQuery.data ?? [],
     transactions: transactionsQuery.data ?? [],
@@ -334,6 +347,7 @@ export function useFinanceData() {
     forecast: forecastQuery.data ?? [],
     snapshots: snapshotsQuery.data ?? [],
     availablePoints: pointsQuery.data ?? new Map<string, number>(),
+    merchantTags: merchantTagsQuery.data ?? new Map<string, 'personal' | 'property'>(),
     loading: accountsQuery.isLoading || transactionsQuery.isLoading || cardsQuery.isLoading,
     error: accountsQuery.error || transactionsQuery.error || cardsQuery.error,
     // Most recent sync across cards (finance_synced_at) and accounts (updated_at).
