@@ -899,11 +899,8 @@ const Dashboard = () => {
               </div>
             )}
 
-            {/* AI Ask */}
-            <AskBox accounts={accounts} cards={cards} transactions={transactions} />
-
-            {/* KPI row removed — the "Due this week" hero already shows net cash,
-                available cash, card debt, and credit available (no duplication). */}
+            {/* KPI row removed — the hero already shows net cash / available /
+                debt / credit. The Ask box moved to the bottom (it's a utility). */}
 
             {/* 0% balance-transfer promo payoff tracker */}
             {btPromos.filter((p) => p.remaining > 0.005).map((p) => (
@@ -954,7 +951,7 @@ const Dashboard = () => {
                 <span className="text-sm font-semibold text-success">{fmtMoney(availableCash, { cents: true })} total</span>
               </div>
               {depository.length === 0 ? (
-                <div className="bg-card rounded-2xl border border-border p-5"><Empty>No bank accounts synced yet.</Empty></div>
+                <div className="bg-card rounded-2xl border border-border p-5 shadow-sm"><Empty>No bank accounts synced yet.</Empty></div>
               ) : (
                 // auto-fit packs as many compact tiles per row as fit (~200px
                 // min), so 4 accounts land in one row and it still wraps
@@ -1018,13 +1015,13 @@ const Dashboard = () => {
 
             {/* Insights — spending / activity / recurring / projection, tabbed so
                 only one shows at a time (keeps the page from feeling busy). */}
-            <div className="flex items-center gap-1.5 flex-wrap pt-1">
+            <div className="inline-flex items-center gap-1 rounded-xl bg-muted p-1">
               {(['spending', 'activity', 'recurring', 'projection'] as const)
                 .filter((t) => t !== 'projection' || forecast.length > 0)
                 .map((t) => (
                   <button key={t} type="button" onClick={() => setInsightTab(t)}
-                    className={cn('px-3 h-9 rounded-lg text-sm font-medium border transition-colors capitalize',
-                      insightTab === t ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border text-muted-foreground hover:bg-muted')}>
+                    className={cn('px-3.5 h-8 rounded-lg text-sm font-medium transition-colors capitalize',
+                      insightTab === t ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
                     {t}
                   </button>
                 ))}
@@ -1032,7 +1029,7 @@ const Dashboard = () => {
 
             {/* Activity: income/spend/payments roll-up + recent payments & transactions */}
             {insightTab === 'activity' && (
-            <div className="bg-card rounded-2xl border border-border p-5">
+            <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <SectionTitle icon={TrendingUp}>Activity</SectionTitle>
                 <div className="flex items-center gap-1">
@@ -1059,7 +1056,7 @@ const Dashboard = () => {
 
             {/* Monthly spending */}
             {insightTab === 'spending' && monthlySpend.length >= 2 && (
-              <div className="bg-card rounded-2xl border border-border p-5">
+              <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
                 <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
                   <SectionTitle icon={TrendingUp}>Monthly Spending</SectionTitle>
                   {spendInsight.momPct != null && (
@@ -1085,7 +1082,7 @@ const Dashboard = () => {
             {/* Recurring charges — subscriptions / regular bills detected from history.
                 Surfaced prominently with the annual cost, so forgotten charges stand out. */}
             {insightTab === 'recurring' && recurring.length > 0 && (
-              <div className="bg-card rounded-2xl border border-border p-5">
+              <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <SectionTitle icon={Repeat}>Recurring Charges</SectionTitle>
                   <span className="text-sm text-muted-foreground">
@@ -1137,7 +1134,7 @@ const Dashboard = () => {
             {/* Activity (cont.): recent payments & transactions */}
             {insightTab === 'activity' && (
             <div className="grid gap-4 lg:grid-cols-2">
-              <div className="bg-card rounded-2xl border border-border p-5">
+              <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
                 <SectionTitle icon={CheckCircle2}>Recent Payments</SectionTitle>
                 {payments.length === 0 ? (
                   <Empty>No card payments in the synced period.</Empty>
@@ -1149,7 +1146,7 @@ const Dashboard = () => {
                   </div>
                 )}
               </div>
-              <div className="bg-card rounded-2xl border border-border p-5">
+              <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
                 <SectionTitle icon={TrendingDown}>Recent Transactions</SectionTitle>
                 {recentTxns.length === 0 ? (
                   <Empty>No transactions synced yet.</Empty>
@@ -1166,7 +1163,7 @@ const Dashboard = () => {
 
             {/* Projection */}
             {insightTab === 'projection' && forecast.length > 0 && (
-              <div className="bg-card rounded-2xl border border-border p-5">
+              <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
                 <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
                   <SectionTitle icon={TrendingUp}>Cash Projection</SectionTitle>
                   <div className="flex items-center gap-4 text-sm">
@@ -1186,6 +1183,9 @@ const Dashboard = () => {
                 <CashProjectionChart data={forecast} lowest={lowestPoint} />
               </div>
             )}
+
+            {/* Ask — AI Q&A about your finances; a utility, so it sits at the end */}
+            <AskBox accounts={accounts} cards={cards} transactions={transactions} />
 
           </>
         )}
