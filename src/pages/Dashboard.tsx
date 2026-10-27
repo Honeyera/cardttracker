@@ -241,7 +241,7 @@ const Dashboard = () => {
   const [cardSort, setCardSort] = useState<CardSort>('urgency');
   const [activityDetail, setActivityDetail] = useState<null | 'income' | 'spend' | 'payments'>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null); // YYYY-MM clicked on the spend chart
-  const [insightTab, setInsightTab] = useState<'spending' | 'activity' | 'recurring' | 'projection'>('spending');
+  const [insightTab, setInsightTab] = useState<'spending' | 'activity' | 'recurring' | 'properties' | 'projection'>('spending');
   // Dismissed alerts, keyed by a per-cycle signature so they return when action
   // is next needed (e.g. new due date / new statement). Persisted per browser.
   const [dismissed, setDismissed] = useState<Set<string>>(() => {
@@ -346,13 +346,22 @@ const Dashboard = () => {
   );
 
   // ── Activity roll-up, scoped to a selected period ──────────────────
+  // TD account (••5097) is the owner's investment-property bucket: rent income
+  // and property costs there are NOT personal income/spend — they're shown
+  // separately in the Properties tab and excluded from the personal figures.
+  const propertyAccountIds = useMemo(() => {
+    const propLast4 = new Set(['5097']); // TD Personal CHK — rentals
+    return new Set(accounts.filter((a) => a.lastFour && propLast4.has(a.lastFour)).map((a) => a.id));
+  }, [accounts]);
+
   const activityFrom = activityPeriod === 'month' ? isoMonthStart()
     : activityPeriod === '30d' ? isoDaysAgo(30)
     : activityPeriod === '90d' ? isoDaysAgo(90)
     : activityPeriod === 'ytd' ? isoYearStart() : '';
   const activityTxns = useMemo(
-    () => brandTxns.filter((t) => !activityFrom || t.date >= activityFrom),
-    [brandTxns, activityFrom],
+    () => brandTxns.filter((t) => (!activityFrom || t.date >= activityFrom)
+      && !(t.accountId && propertyAccountIds.has(t.accountId))),
+    [brandTxns, activityFrom, propertyAccountIds],
   );
   // Income = real deposits only (refunds are money-back on purchases, not revenue).
   // Spending = purchases + fees, net of refunds (a refund reverses a purchase).
@@ -376,15 +385,29 @@ const Dashboard = () => {
   }, [activityTxns]);
   const paymentsTotal = payments.reduce((s, t) => s + t.amount, 0);
 
+  // Rental-property cash flow through the TD account, over the selected period:
+  // rent/income IN vs property costs OUT (expenses, fees, mortgage/loan payments).
+  // Transfers to/from personal are excluded (own-money moves, not cash flow).
+  const propertyFlow = useMemo(() => {
+    const txns = brandTxns.filter((t) => t.accountId && propertyAccountIds.has(t.accountId)
+      && (!activityFrom || t.date >= activityFrom));
+    const sum = (pred: (t: FinanceTransaction) => boolean) => txns.filter(pred).reduce((s, t) => s + t.amount, 0);
+    const income = sum((t) => t.type === 'income');
+    const refunds = sum((t) => t.type === 'refund');
+    const costs = sum((t) => t.type === 'expense' || t.type === 'fee' || t.type === 'payment') - refunds;
+    return { income, costs, net: income - costs, count: txns.length };
+  }, [brandTxns, propertyAccountIds, activityFrom]);
+
   // Month-over-month spending: net spend (purchases + fees − refunds) per
   // calendar month for the trailing 12 months, from the first month with data
   // up to now. Gaps fill as 0; the current (in-progress) month is flagged partial.
-  // Bank accounts kept OUT of the Monthly Spending view (not the owner's personal
-  // spending) — matched by last-four so a rename won't break it. '0015' = Michael's CHK.
+  // Accounts kept OUT of Monthly Spending: Michael's CHK ('0015', not mine) plus
+  // the property account (its costs live under Properties, not personal spend).
   const spendExcludedAccountIds = useMemo(() => {
-    const excludeLast4 = new Set(['0015']);
-    return new Set(accounts.filter((a) => a.lastFour && excludeLast4.has(a.lastFour)).map((a) => a.id));
-  }, [accounts]);
+    const ids = new Set(accounts.filter((a) => a.lastFour === '0015').map((a) => a.id));
+    propertyAccountIds.forEach((id) => ids.add(id));
+    return ids;
+  }, [accounts, propertyAccountIds]);
 
   const monthlySpend = useMemo(() => {
     const byMonth = new Map<string, number>();
@@ -1023,8 +1046,8 @@ const Dashboard = () => {
             <div className="flex items-center justify-between flex-wrap gap-3 pt-2">
               <SectionTitle icon={TrendingUp}>Insights</SectionTitle>
               <div className="inline-flex items-center gap-1 rounded-xl bg-muted p-1">
-                {(['spending', 'activity', 'recurring', 'projection'] as const)
-                  .filter((t) => t !== 'projection' || forecast.length > 0)
+                {(['spending', 'activity', 'recurring', 'properties', 'projection'] as const)
+                  .filter((t) => (t !== 'projection' || forecast.length > 0) && (t !== 'properties' || propertyAccountIds.size > 0))
                   .map((t) => (
                     <button key={t} type="button" onClick={() => setInsightTab(t)}
                       className={cn('px-3.5 h-8 rounded-lg text-sm font-medium transition-colors capitalize',
@@ -1135,6 +1158,35 @@ const Dashboard = () => {
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            )}
+
+            {/* Properties: rental cash flow through the TD account, kept out of personal spend/income */}
+            {insightTab === 'properties' && propertyAccountIds.size > 0 && (
+              <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <SectionTitle icon={Landmark}>Rental Properties</SectionTitle>
+                  <div className="flex items-center gap-1">
+                    <RangeChip onClick={() => setActivityPeriod('month')} active={activityPeriod === 'month'}>This Month</RangeChip>
+                    <RangeChip onClick={() => setActivityPeriod('90d')} active={activityPeriod === '90d'}>90d</RangeChip>
+                    <RangeChip onClick={() => setActivityPeriod('ytd')} active={activityPeriod === 'ytd'}>YTD</RangeChip>
+                    <RangeChip onClick={() => setActivityPeriod('all')} active={activityPeriod === 'all'}>All</RangeChip>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Cash flow through your TD account — rent in vs property costs out (incl. mortgage/loan payments).
+                  Kept separate from personal spending &amp; income.
+                </p>
+                <div className="grid gap-3 sm:grid-cols-3 mt-3">
+                  <Flow label="Rent / income in" value={propertyFlow.income} icon={ArrowDownRight} tone="success" />
+                  <Flow label="Property costs out" value={propertyFlow.costs} icon={ArrowUpRight} tone="warning" />
+                  <div className="flex items-center justify-between sm:justify-end sm:gap-2" title="Rent in − costs out">
+                    <span className="text-sm font-medium">Net cash flow</span>
+                    <span className={cn('text-sm font-bold', propertyFlow.net >= 0 ? 'text-success' : 'text-destructive')}>
+                      {fmtMoney(propertyFlow.net, { cents: true })}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
