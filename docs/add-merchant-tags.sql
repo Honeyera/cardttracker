@@ -16,6 +16,7 @@ create table if not exists public.merchant_tags (
 
 alter table public.merchant_tags enable row level security;
 
--- Each user manages only their own rules.
+-- Each user manages only their own rules. (drop-then-create = safe to re-run)
+drop policy if exists "own merchant_tags" on public.merchant_tags;
 create policy "own merchant_tags" on public.merchant_tags
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
