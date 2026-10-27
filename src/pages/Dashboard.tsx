@@ -424,25 +424,42 @@ const Dashboard = () => {
   // Rental-property cash flow through the TD account, over the selected period:
   // rent/income IN vs property costs OUT (expenses, fees, mortgage/loan payments).
   // Transfers to/from personal are excluded (own-money moves, not cash flow).
+  const isRentIn = (t: FinanceTransaction) =>
+    t.type === 'income' || (t.type === 'transfer' && (t.category ?? '').startsWith('transfer_in'));
+  // Whether a property txn falls in the selected period. For the single-MONTH
+  // view, RENT is attributed by its "rent month": payments arriving in the last
+  // ROLL_RENT_DAYS of a month count toward the NEXT month, so rent that comes a
+  // few days early (e.g. NJ rental assistance) lands in the month it's for.
+  // Costs and the longer periods use the actual date.
+  const ROLL_RENT_DAYS = 10;
+  const inPropertyPeriod = useCallback((t: FinanceTransaction): boolean => {
+    if (isRentIn(t) && activityPeriod === 'month') {
+      const d = new Date(`${t.date}T00:00:00`);
+      const dim = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      const base = d.getDate() > dim - ROLL_RENT_DAYS ? new Date(d.getFullYear(), d.getMonth() + 1, 1) : d;
+      const now = new Date();
+      return base.getFullYear() === now.getFullYear() && base.getMonth() === now.getMonth();
+    }
+    return !activityFrom || t.date >= activityFrom;
+  }, [activityFrom, activityPeriod]);
+
   const propertyFlow = useMemo(() => {
-    const txns = brandTxns.filter((t) => isProperty(t) && (!activityFrom || t.date >= activityFrom));
+    const txns = brandTxns.filter((t) => isProperty(t) && inPropertyPeriod(t));
     const sum = (pred: (t: FinanceTransaction) => boolean) => txns.filter(pred).reduce((s, t) => s + t.amount, 0);
-    // Rent arrives as standard deposits (income) AND via Zelle / bank transfers
-    // (type 'transfer' with a transfer_IN category) — count both as rent.
-    const income = sum((t) => t.type === 'income' || (t.type === 'transfer' && (t.category ?? '').startsWith('transfer_in')));
+    const income = sum(isRentIn);
     const refunds = sum((t) => t.type === 'refund');
     const costs = sum((t) => t.type === 'expense' || t.type === 'fee' || t.type === 'payment') - refunds;
     return { income, costs, net: income - costs, count: txns.length };
-  }, [brandTxns, isProperty, activityFrom]);
+  }, [brandTxns, isProperty, inPropertyPeriod]);
 
   // The property account's own transactions (within the selected period), newest
   // first — listed under the Properties tab so you can see the rental activity.
   const propertyTxns = useMemo(
     () => brandTxns
-      .filter((t) => isProperty(t) && (!activityFrom || t.date >= activityFrom))
+      .filter((t) => isProperty(t) && inPropertyPeriod(t))
       .slice()
       .sort((a, b) => ((a.createdAt ?? a.date) < (b.createdAt ?? b.date) ? 1 : -1)),
-    [brandTxns, isProperty, activityFrom],
+    [brandTxns, isProperty, inPropertyPeriod],
   );
 
   // Month-over-month spending: net spend (purchases + fees − refunds) per
