@@ -1095,8 +1095,8 @@ const Dashboard = () => {
                 <p className="text-xs text-muted-foreground mt-1">
                   Charges that repeat on a schedule — a quick way to catch subscriptions you forgot you're paying for.
                 </p>
-                <div className="mt-3 space-y-1.5">
-                  {recurringSorted.slice(0, 12).map((r) => {
+                <div className="mt-3 space-y-1.5 max-h-[32rem] overflow-y-auto overflow-x-hidden -mx-1 px-1">
+                  {recurringSorted.map((r) => {
                     const card = r.creditCardId ? cards.find((c) => c.id === r.creditCardId) : null;
                     const acct = r.accountId ? accounts.find((a) => a.id === r.accountId) : null;
                     const src = card ? `${card.name}${card.lastFour ? ` ••${card.lastFour}` : ''}`
