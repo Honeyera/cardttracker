@@ -448,7 +448,12 @@ const Dashboard = () => {
   }, [monthlySpend]);
 
   // Recurring charges — detected from the FULL history (not the activity window).
-  const recurring = useMemo(() => detectRecurring(brandTxns), [brandTxns]);
+  // Property-account (TD) charges are excluded: those are rental costs, shown in
+  // the Properties tab, not personal subscriptions.
+  const recurring = useMemo(
+    () => detectRecurring(brandTxns.filter((t) => !(t.accountId && propertyAccountIds.has(t.accountId)))),
+    [brandTxns, propertyAccountIds],
+  );
   const recurringMonthly = recurring.reduce((s, r) => s + r.monthlyEquivalent, 0);
 
   // 0% balance-transfer promo payoff tracker (per BT_PROMOS). Tracks the
