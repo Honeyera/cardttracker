@@ -2280,7 +2280,9 @@ function TxnRow({ txn, source, isNew, property, onSetTag }: {
   txn: FinanceTransaction; source?: string | null; isNew?: boolean;
   property?: boolean; onSetTag?: (tag: 'personal' | 'property') => void;
 }) {
-  const inflow = txn.type === 'income' || txn.type === 'refund';
+  // Money coming in: deposits, refunds, and incoming transfers (Zelle/bank in).
+  const inflow = txn.type === 'income' || txn.type === 'refund'
+    || (txn.type === 'transfer' && (txn.category ?? '').startsWith('transfer_in'));
   const isPayment = txn.type === 'payment';
   // Show the raw description exactly as the bank/Amex statement does — no stripping.
   const name = txn.description || txn.merchantName;
