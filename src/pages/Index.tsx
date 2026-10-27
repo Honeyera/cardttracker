@@ -163,12 +163,6 @@ const Index = () => {
                 Dashboard
               </Link>
             </Button>
-            <Button size="sm" variant="outline" asChild>
-              <Link to="/points">
-                <Trophy className="w-4 h-4 mr-1" />
-                Points
-              </Link>
-            </Button>
             {/* Screenshot import & Paste-Text buttons hidden on the personal
                 instance: their AI edge functions (analyze-screenshot, parse-text)
                 aren't deployed. Re-add these buttons to restore. */}
