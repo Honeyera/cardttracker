@@ -673,7 +673,6 @@ const Dashboard = () => {
             </div>
             <div>
               <h1 className="text-xl font-bold text-foreground">Personal Finance Tracker</h1>
-              <p className="text-xs text-muted-foreground">Cash &amp; card overview</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1015,16 +1014,19 @@ const Dashboard = () => {
 
             {/* Insights — spending / activity / recurring / projection, tabbed so
                 only one shows at a time (keeps the page from feeling busy). */}
-            <div className="inline-flex items-center gap-1 rounded-xl bg-muted p-1">
-              {(['spending', 'activity', 'recurring', 'projection'] as const)
-                .filter((t) => t !== 'projection' || forecast.length > 0)
-                .map((t) => (
-                  <button key={t} type="button" onClick={() => setInsightTab(t)}
-                    className={cn('px-3.5 h-8 rounded-lg text-sm font-medium transition-colors capitalize',
-                      insightTab === t ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
-                    {t}
-                  </button>
-                ))}
+            <div className="flex items-center justify-between flex-wrap gap-3 pt-2">
+              <SectionTitle icon={TrendingUp}>Insights</SectionTitle>
+              <div className="inline-flex items-center gap-1 rounded-xl bg-muted p-1">
+                {(['spending', 'activity', 'recurring', 'projection'] as const)
+                  .filter((t) => t !== 'projection' || forecast.length > 0)
+                  .map((t) => (
+                    <button key={t} type="button" onClick={() => setInsightTab(t)}
+                      className={cn('px-3.5 h-8 rounded-lg text-sm font-medium transition-colors capitalize',
+                        insightTab === t ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+                      {t}
+                    </button>
+                  ))}
+              </div>
             </div>
 
             {/* Activity: income/spend/payments roll-up + recent payments & transactions */}
