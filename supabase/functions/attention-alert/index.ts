@@ -19,6 +19,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const DUE_WINDOW_DAYS = 3; // "due soon" = unpaid statement due within N days
+const DUE_EPSILON = 10; // ignore tiny statement residuals (rounding / payment-timing gaps)
 
 const fmt = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
@@ -80,7 +81,7 @@ serve(async (req) => {
         paid = (pays ?? []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
       }
       const owed = stmt - paid;
-      if (owed <= 0.005) continue; // statement covered
+      if (owed <= DUE_EPSILON) continue; // statement covered (ignoring tiny residuals)
 
       const due = c.next_payment_due_date ? new Date(`${c.next_payment_due_date}T00:00:00Z`) : null;
       const days = due ? daysBetween(due, today) : null;

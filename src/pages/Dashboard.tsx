@@ -70,6 +70,12 @@ function resolveDue(card: FinanceCard): { date: Date; days: number } | null {
   return { date, days: differenceInCalendarDays(date, today) };
 }
 
+// Ignore tiny statement residuals — rounding or payment-timing gaps between the
+// synced statement balance and the payments we matched. Anything paid to within
+// this many dollars of the statement counts as covered, so a few-dollar leftover
+// doesn't nag as "due". Raise/lower to taste.
+const DUE_EPSILON = 10;
+
 // A card has nothing due when the sync says so (payment_status / zero minimum)
 // or the statement balance is cleared — even if a running balance remains.
 function isSettled(card: FinanceCard, paidTowardStatement = 0): boolean {
@@ -90,10 +96,10 @@ function isSettled(card: FinanceCard, paidTowardStatement = 0): boolean {
   // any remaining balance is next-cycle spending, so nothing is due now.
   const stmt = card.lastStatementBalance ?? 0;
   if (stmt > 0.005) {
-    if (paidTowardStatement + 0.005 >= stmt) return true;
+    if (paidTowardStatement + DUE_EPSILON >= stmt) return true;
     if (
       card.lastPaymentAmount != null && card.lastPaymentDate != null && card.lastStatementDate != null &&
-      card.lastPaymentAmount + 0.005 >= stmt && card.lastPaymentDate >= card.lastStatementDate
+      card.lastPaymentAmount + DUE_EPSILON >= stmt && card.lastPaymentDate >= card.lastStatementDate
     ) return true;
   }
   return false;
@@ -111,7 +117,7 @@ function interestRisk(card: FinanceCard, paidTowardStatement: number): { paid: n
   const stmt = card.lastStatementBalance ?? 0;
   if (stmt <= 0.005) return null;
   if (paidTowardStatement <= 0.005) return null; // nothing paid → a "due" case, not underpayment
-  if (paidTowardStatement + 0.005 >= stmt) return null; // statement fully paid (across any number of payments)
+  if (paidTowardStatement + DUE_EPSILON >= stmt) return null; // statement paid (within the small-residual threshold)
   // You can't accrue interest on more than you currently owe; if what's left is
   // within the minimum payment, treat the statement as effectively paid.
   const atRisk = Math.min(stmt - paidTowardStatement, card.currentBalance);
@@ -127,7 +133,7 @@ function unpaidStatementDueWithin(card: FinanceCard, paidTowardStatement: number
   if (card.isOverdue) return null;
   const stmt = card.lastStatementBalance ?? 0;
   if (stmt <= 0.005) return null;
-  if (paidTowardStatement + 0.005 >= stmt) return null; // statement already covered
+  if (paidTowardStatement + DUE_EPSILON >= stmt) return null; // statement already covered (within the small-residual threshold)
   const due = resolveDue(card);
   if (!due || due.days < 0 || due.days > days) return null;
   return due;
@@ -1492,7 +1498,7 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
       subtext: paidSubtext,
     };
   } else if (settled) {
-    const statementPaid = stmtBal > 0.005 && (paidTowardStatement + 0.005) >= stmtBal;
+    const statementPaid = stmtBal > 0.005 && (paidTowardStatement + DUE_EPSILON) >= stmtBal;
     if (statementPaid) {
       // Statement was paid — show it as paid, not as an amount due.
       strip = {
