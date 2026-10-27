@@ -235,6 +235,7 @@ const Dashboard = () => {
   const [cardSort, setCardSort] = useState<CardSort>('urgency');
   const [activityDetail, setActivityDetail] = useState<null | 'income' | 'spend' | 'payments'>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null); // YYYY-MM clicked on the spend chart
+  const [insightTab, setInsightTab] = useState<'spending' | 'activity' | 'recurring' | 'projection'>('spending');
   // Dismissed alerts, keyed by a per-cycle signature so they return when action
   // is next needed (e.g. new due date / new statement). Persisted per browser.
   const [dismissed, setDismissed] = useState<Set<string>>(() => {
@@ -901,18 +902,8 @@ const Dashboard = () => {
             {/* AI Ask */}
             <AskBox accounts={accounts} cards={cards} transactions={transactions} />
 
-            {/* KPI row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Kpi label="Available Cash" value={fmtMoney(availableCash)} icon={Landmark} tone="success"
-                   sub={`${depository.length} bank ${depository.length === 1 ? 'account' : 'accounts'}`} />
-              <Kpi label="Total Card Debt" value={fmtMoney(totalCardDebt)} icon={CardIcon} tone="warning"
-                   sub={`${visibleCards.length} cards • ${fmtMoney(creditAvailable)} available`} />
-              <Kpi label="Net Cash Position" value={fmtMoney(availableCash - totalCardDebt)} icon={TrendingUp}
-                   tone={availableCash - totalCardDebt >= 0 ? 'success' : 'danger'}
-                   sub="cash minus card debt" />
-              <Kpi label="Credit Available" value={fmtMoney(creditAvailable)} icon={Percent} tone="primary"
-                   sub={`across ${visibleCards.length} ${visibleCards.length === 1 ? 'card' : 'cards'}`} />
-            </div>
+            {/* KPI row removed — the "Due this week" hero already shows net cash,
+                available cash, card debt, and credit available (no duplication). */}
 
             {/* 0% balance-transfer promo payoff tracker */}
             {btPromos.filter((p) => p.remaining > 0.005).map((p) => (
@@ -995,29 +986,6 @@ const Dashboard = () => {
               </div>
             )}
 
-            {/* Cash projection */}
-            {forecast.length > 0 && (
-              <div className="bg-card rounded-2xl border border-border p-5">
-                <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-                  <SectionTitle icon={TrendingUp}>Cash Projection</SectionTitle>
-                  <div className="flex items-center gap-4 text-sm">
-                    {lowestPoint && (
-                      <span className="text-muted-foreground">
-                        Lowest: <span className={cn('font-semibold', lowestPoint.projectedBalance < 0 ? 'text-destructive' : 'text-foreground')}>
-                          {fmtMoney(lowestPoint.projectedBalance)}</span> on {format(parseISO(lowestPoint.date), 'MMM d')}
-                      </span>
-                    )}
-                    {endPoint && (
-                      <span className="text-muted-foreground">
-                        End: <span className="font-semibold text-foreground">{fmtMoney(endPoint.projectedBalance)}</span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <CashProjectionChart data={forecast} lowest={lowestPoint} />
-              </div>
-            )}
-
             {/* Card tiles */}
             <div>
               <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
@@ -1048,7 +1016,22 @@ const Dashboard = () => {
               )}
             </div>
 
-            {/* Activity summary */}
+            {/* Insights — spending / activity / recurring / projection, tabbed so
+                only one shows at a time (keeps the page from feeling busy). */}
+            <div className="flex items-center gap-1.5 flex-wrap pt-1">
+              {(['spending', 'activity', 'recurring', 'projection'] as const)
+                .filter((t) => t !== 'projection' || forecast.length > 0)
+                .map((t) => (
+                  <button key={t} type="button" onClick={() => setInsightTab(t)}
+                    className={cn('px-3 h-9 rounded-lg text-sm font-medium border transition-colors capitalize',
+                      insightTab === t ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border text-muted-foreground hover:bg-muted')}>
+                    {t}
+                  </button>
+                ))}
+            </div>
+
+            {/* Activity: income/spend/payments roll-up + recent payments & transactions */}
+            {insightTab === 'activity' && (
             <div className="bg-card rounded-2xl border border-border p-5">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <SectionTitle icon={TrendingUp}>Activity</SectionTitle>
@@ -1072,9 +1055,10 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
+            )}
 
-            {/* Monthly spending trend */}
-            {monthlySpend.length >= 2 && (
+            {/* Monthly spending */}
+            {insightTab === 'spending' && monthlySpend.length >= 2 && (
               <div className="bg-card rounded-2xl border border-border p-5">
                 <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
                   <SectionTitle icon={TrendingUp}>Monthly Spending</SectionTitle>
@@ -1100,7 +1084,7 @@ const Dashboard = () => {
 
             {/* Recurring charges — subscriptions / regular bills detected from history.
                 Surfaced prominently with the annual cost, so forgotten charges stand out. */}
-            {recurring.length > 0 && (
+            {insightTab === 'recurring' && recurring.length > 0 && (
               <div className="bg-card rounded-2xl border border-border p-5">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <SectionTitle icon={Repeat}>Recurring Charges</SectionTitle>
@@ -1150,7 +1134,8 @@ const Dashboard = () => {
               </div>
             )}
 
-            {/* Payments + recent transactions */}
+            {/* Activity (cont.): recent payments & transactions */}
+            {insightTab === 'activity' && (
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="bg-card rounded-2xl border border-border p-5">
                 <SectionTitle icon={CheckCircle2}>Recent Payments</SectionTitle>
@@ -1177,6 +1162,30 @@ const Dashboard = () => {
                 )}
               </div>
             </div>
+            )}
+
+            {/* Projection */}
+            {insightTab === 'projection' && forecast.length > 0 && (
+              <div className="bg-card rounded-2xl border border-border p-5">
+                <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                  <SectionTitle icon={TrendingUp}>Cash Projection</SectionTitle>
+                  <div className="flex items-center gap-4 text-sm">
+                    {lowestPoint && (
+                      <span className="text-muted-foreground">
+                        Lowest: <span className={cn('font-semibold', lowestPoint.projectedBalance < 0 ? 'text-destructive' : 'text-foreground')}>
+                          {fmtMoney(lowestPoint.projectedBalance)}</span> on {format(parseISO(lowestPoint.date), 'MMM d')}
+                      </span>
+                    )}
+                    {endPoint && (
+                      <span className="text-muted-foreground">
+                        End: <span className="font-semibold text-foreground">{fmtMoney(endPoint.projectedBalance)}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <CashProjectionChart data={forecast} lowest={lowestPoint} />
+              </div>
+            )}
 
           </>
         )}
