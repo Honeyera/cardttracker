@@ -50,6 +50,9 @@ function classifyTxn(t: any, isCredit: boolean): { type: string; amount: number 
       // A balance transfer moves EXISTING debt onto the card — not new spending.
       // The transferred principal is a transfer; the BT fee is a real finance fee.
       if (/balance\s*transfer/.test(name)) return { type: /fee/.test(name) ? "fee" : "transfer", amount: abs };
+      // A convenience/"access check" draws on the credit line (like a balance
+      // transfer or cash advance), not a purchase — don't count it as spend.
+      if (/access\s*check/.test(name)) return { type: "transfer", amount: abs };
       return { type: "expense", amount: abs };
     }
     // Money in on a card: a real payment or a refund/credit.

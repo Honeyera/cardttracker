@@ -193,20 +193,30 @@ export function useFinanceData() {
         rows.push(...(data ?? []));
         if (!data || data.length < pageSize) break;
       }
-      return rows.map((t: any) => ({
-        id: t.id,
-        accountId: t.account_id ?? null,
-        creditCardId: t.credit_card_id ?? null,
-        date: t.transaction_date,
-        description: t.description ?? '',
-        merchantName: t.merchant_name ?? null,
-        amount: num(t.amount),
-        type: t.transaction_type ?? 'expense',
-        category: t.category ?? null,
-        isPending: t.is_pending ?? false,
-        isRecurring: t.is_recurring ?? false,
-        createdAt: t.created_at ?? null,
-      }));
+      return rows.map((t: any) => {
+        const description = t.description ?? '';
+        let type = t.transaction_type ?? 'expense';
+        // A BofA "Access Check" is a convenience check drawn against the credit
+        // line (like a balance transfer / cash advance) — NOT a purchase. Treat it
+        // as a transfer so it doesn't count as spend (same as balance transfers).
+        if (t.credit_card_id && type === 'expense' && /access\s*check/i.test(description)) {
+          type = 'transfer';
+        }
+        return {
+          id: t.id,
+          accountId: t.account_id ?? null,
+          creditCardId: t.credit_card_id ?? null,
+          date: t.transaction_date,
+          description,
+          merchantName: t.merchant_name ?? null,
+          amount: num(t.amount),
+          type,
+          category: t.category ?? null,
+          isPending: t.is_pending ?? false,
+          isRecurring: t.is_recurring ?? false,
+          createdAt: t.created_at ?? null,
+        };
+      });
     },
   });
 
