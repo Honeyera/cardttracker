@@ -570,14 +570,19 @@ const Dashboard = () => {
       const isBT = (t: FinanceTransaction) => /balance\s*transfer/i.test(`${t.description} ${t.merchantName ?? ''}`);
       const btTxns = transactions.filter((t) => t.creditCardId === card.id && isBT(t));
       if (btTxns.length === 0) return [];
-      const original = Math.round(btTxns.reduce((s, t) => s + Math.abs(t.amount), 0) * 100) / 100;
+      const detected = Math.round(btTxns.reduce((s, t) => s + Math.abs(t.amount), 0) * 100) / 100;
       const transferDate = btTxns.map((t) => t.date).sort()[0];
       const pays = transactions.filter((t) => t.creditCardId === card.id && t.type === 'payment' && t.date >= transferDate);
-      // Remaining on the transfer = the card's LIVE balance (authoritative from
-      // Plaid), capped at the amount transferred. Paid is derived from that, so
-      // the figure always matches the real card balance rather than drifting
-      // from imperfectly-matched payment history.
-      const remaining = Math.max(0, Math.min(original, Math.round(card.currentBalance * 100) / 100));
+      // Remaining = the card's LIVE balance straight from Plaid (authoritative).
+      // We intentionally DON'T cap it at the auto-detected transfer amount — that
+      // detection misses charges outside the synced window and was under-reporting
+      // the real payoff. The headline always equals exactly what Plaid reports.
+      const remaining = Math.max(0, Math.round(card.currentBalance * 100) / 100);
+      // "Transferred" baseline for the progress bar only: reconstruct from what's
+      // still owed plus payments made since the transfer; never below the detected
+      // amount, so remaining can't exceed the baseline.
+      const paidSoFar = Math.max(0, Math.round(pays.reduce((s, t) => s + t.amount, 0) * 100) / 100);
+      const original = Math.max(detected, Math.round((remaining + paidSoFar) * 100) / 100);
       const paid = Math.max(0, Math.round((original - remaining) * 100) / 100);
       const end = new Date(`${cfg.endDate}T00:00:00`);
       const daysLeft = Math.round((end.getTime() - today.getTime()) / 86_400_000);
