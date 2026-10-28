@@ -479,10 +479,17 @@ const Dashboard = () => {
   const businessFlow = useMemo(() => {
     const txns = brandTxns.filter((t) => isBusiness(t) && (!activityFrom || t.date >= activityFrom));
     const sum = (pred: (t: FinanceTransaction) => boolean) => txns.filter(pred).reduce((s, t) => s + t.amount, 0);
-    const income = sum((t) => t.type === 'income' || (t.type === 'transfer' && (t.category ?? '').startsWith('transfer_in')));
+    const isInflow = (t: FinanceTransaction) => t.type === 'income' || (t.type === 'transfer' && (t.category ?? '').startsWith('transfer_in'));
+    // Owner draws / payroll: money moved OUT of the business to a personal account —
+    // a Plaid transfer_out, or a "transfer to checking" (e.g. to the owner's Citi ••3017).
+    const isDraw = (t: FinanceTransaction) => !isInflow(t) && (
+      (t.type === 'transfer' && (t.category ?? '').startsWith('transfer_out'))
+      || /transfer to checking/i.test(t.description ?? '')
+    );
+    const income = sum(isInflow);
     const refunds = sum((t) => t.type === 'refund');
-    const expenses = sum((t) => t.type === 'expense' || t.type === 'fee' || t.type === 'payment') - refunds;
-    const draws = sum((t) => t.type === 'transfer' && (t.category ?? '').startsWith('transfer_out'));
+    const draws = sum(isDraw);
+    const expenses = sum((t) => !isDraw(t) && (t.type === 'expense' || t.type === 'fee' || t.type === 'payment')) - refunds;
     return { income, expenses, draws, net: income - expenses - draws };
   }, [brandTxns, isBusiness, activityFrom]);
 
@@ -1369,7 +1376,7 @@ const Dashboard = () => {
                   <div className="space-y-2 max-h-96 overflow-y-auto overflow-x-hidden -mx-2 px-2">
                     {businessTxns.slice(0, 100).map((t) => (
                       <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)}
-                        tag={classify(t)}
+                        tag={classify(t)} tagOptions={['personal', 'business']}
                         onSetTag={(tag) => setMerchantTag(merchantKey(t), tag)} />
                     ))}
                   </div>
@@ -2367,9 +2374,9 @@ function payeeAndVia(rawName: string, proc: string | null): { name: string; show
   return { name: cleaned, showVia: true };
 }
 
-function TxnRow({ txn, source, isNew, tag, onSetTag }: {
+function TxnRow({ txn, source, isNew, tag, onSetTag, tagOptions = ['personal', 'property', 'business'] }: {
   txn: FinanceTransaction; source?: string | null; isNew?: boolean;
-  tag?: TxnTag; onSetTag?: (tag: TxnTag) => void;
+  tag?: TxnTag; onSetTag?: (tag: TxnTag) => void; tagOptions?: TxnTag[];
 }) {
   // Money coming in: deposits, refunds, and incoming transfers (Zelle/bank in).
   const inflow = txn.type === 'income' || txn.type === 'refund'
@@ -2405,7 +2412,7 @@ function TxnRow({ txn, source, isNew, tag, onSetTag }: {
         {onSetTag && (
           <div className="inline-flex rounded-full border border-border overflow-hidden text-[10px] font-semibold shrink-0"
             title="Tag this payee — applies to all its charges, past & future">
-            {(['personal', 'property', 'business'] as TxnTag[]).map((opt, i) => (
+            {tagOptions.map((opt, i) => (
               <button key={opt} type="button" onClick={(e) => { e.stopPropagation(); onSetTag(opt); }}
                 className={cn('px-2 py-0.5 transition-colors capitalize', i > 0 && 'border-l border-border',
                   tag === opt ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>
