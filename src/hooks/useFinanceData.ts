@@ -9,6 +9,7 @@ import { CardColor } from '@/types/creditCard';
 const db = supabase as any;
 
 export type AccountType = 'checking' | 'savings' | 'credit_card' | string;
+export type TxnTag = 'personal' | 'property' | 'business';
 
 export interface FinanceAccount {
   id: string;
@@ -331,11 +332,11 @@ export function useFinanceData() {
   const merchantTagsQuery = useQuery({
     queryKey: ['finance', 'merchant_tags', user?.id],
     enabled: !!user,
-    queryFn: async (): Promise<Map<string, 'personal' | 'property'>> => {
+    queryFn: async (): Promise<Map<string, TxnTag>> => {
       const { data, error } = await db.from('merchant_tags').select('merchant_key, tag');
       // Table may not exist yet (before the one-time migration) — degrade to no tags.
-      if (error) return new Map<string, 'personal' | 'property'>();
-      return new Map((data ?? []).map((r: any) => [r.merchant_key as string, r.tag as 'personal' | 'property']));
+      if (error) return new Map<string, TxnTag>();
+      return new Map((data ?? []).map((r: any) => [r.merchant_key as string, r.tag as TxnTag]));
     },
   });
 
@@ -347,7 +348,7 @@ export function useFinanceData() {
     forecast: forecastQuery.data ?? [],
     snapshots: snapshotsQuery.data ?? [],
     availablePoints: pointsQuery.data ?? new Map<string, number>(),
-    merchantTags: merchantTagsQuery.data ?? new Map<string, 'personal' | 'property'>(),
+    merchantTags: merchantTagsQuery.data ?? new Map<string, TxnTag>(),
     loading: accountsQuery.isLoading || transactionsQuery.isLoading || cardsQuery.isLoading,
     error: accountsQuery.error || transactionsQuery.error || cardsQuery.error,
     // Most recent sync across cards (finance_synced_at) and accounts (updated_at).

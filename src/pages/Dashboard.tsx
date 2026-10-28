@@ -4,7 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useTheme } from 'next-themes';
 import { format, parseISO, differenceInCalendarDays } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
-import { useFinanceData, FinanceAccount, FinanceCard, FinanceTransaction, FinanceAlert, ForecastPoint, BalanceSnapshot } from '@/hooks/useFinanceData';
+import { useFinanceData, FinanceAccount, FinanceCard, FinanceTransaction, FinanceAlert, ForecastPoint, BalanceSnapshot, TxnTag } from '@/hooks/useFinanceData';
 import { getNextOccurrence } from '@/utils/dateUtils';
 import { adSpendLimitFor, computeAdSpend, isAdTransaction, AdSpendStatus } from '@/utils/adSpend';
 import { detectRecurring, Cadence } from '@/utils/recurring';
@@ -253,7 +253,7 @@ const Dashboard = () => {
   const [cardSort, setCardSort] = useState<CardSort>('urgency');
   const [activityDetail, setActivityDetail] = useState<null | 'income' | 'spend' | 'payments'>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null); // YYYY-MM clicked on the spend chart
-  const [insightTab, setInsightTab] = useState<'spending' | 'activity' | 'recurring' | 'properties' | 'projection'>('spending');
+  const [insightTab, setInsightTab] = useState<'spending' | 'activity' | 'recurring' | 'properties' | 'business' | 'projection'>('spending');
   // Dismissed alerts, keyed by a per-cycle signature so they return when action
   // is next needed (e.g. new due date / new statement). Persisted per browser.
   const [dismissed, setDismissed] = useState<Set<string>>(() => {
@@ -366,17 +366,28 @@ const Dashboard = () => {
     return new Set(accounts.filter((a) => a.lastFour && propLast4.has(a.lastFour)).map((a) => a.id));
   }, [accounts]);
 
-  // Is a transaction investment/property vs personal? A per-merchant tag wins
-  // (remembered across syncs/months); otherwise the default is account-based
-  // (TD = property, everything else = personal).
-  const isProperty = useCallback((t: FinanceTransaction): boolean => {
-    const tag = merchantTags.get(merchantKey(t));
-    if (tag) return tag === 'property';
-    return !!(t.accountId && propertyAccountIds.has(t.accountId));
-  }, [merchantTags, propertyAccountIds]);
+  // VOWIDEAS business checking (Chase ••7015): default bucket = business.
+  const businessAccountIds = useMemo(
+    () => new Set(accounts.filter((a) => a.lastFour === '7015').map((a) => a.id)),
+    [accounts],
+  );
 
-  // Tag a merchant/payee Personal or Property — applies to all of its transactions.
-  const setMerchantTag = async (key: string, tag: 'personal' | 'property') => {
+  // Classify a transaction Personal / Property / Business. A per-merchant tag
+  // wins (remembered across syncs/months); otherwise the default is account-based
+  // (TD = property, Chase 7015 = business, everything else = personal).
+  const classify = useCallback((t: FinanceTransaction): TxnTag => {
+    const tag = merchantTags.get(merchantKey(t));
+    if (tag === 'property' || tag === 'personal' || tag === 'business') return tag;
+    if (t.accountId && propertyAccountIds.has(t.accountId)) return 'property';
+    if (t.accountId && businessAccountIds.has(t.accountId)) return 'business';
+    return 'personal';
+  }, [merchantTags, propertyAccountIds, businessAccountIds]);
+  const isProperty = useCallback((t: FinanceTransaction) => classify(t) === 'property', [classify]);
+  const isBusiness = useCallback((t: FinanceTransaction) => classify(t) === 'business', [classify]);
+  const isPersonal = useCallback((t: FinanceTransaction) => classify(t) === 'personal', [classify]);
+
+  // Tag a merchant/payee — applies to all of its transactions.
+  const setMerchantTag = async (key: string, tag: TxnTag) => {
     if (!user || !key) return;
     await (supabase as any).from('merchant_tags').upsert(
       { user_id: user.id, merchant_key: key, tag, updated_at: new Date().toISOString() },
@@ -396,8 +407,8 @@ const Dashboard = () => {
     : activityPeriod === '90d' ? isoDaysAgo(90)
     : activityPeriod === 'ytd' ? isoYearStart() : '';
   const activityTxns = useMemo(
-    () => brandTxns.filter((t) => (!activityFrom || t.date >= activityFrom) && !isProperty(t)),
-    [brandTxns, activityFrom, isProperty],
+    () => brandTxns.filter((t) => (!activityFrom || t.date >= activityFrom) && isPersonal(t)),
+    [brandTxns, activityFrom, isPersonal],
   );
   // Income = real deposits only (refunds are money-back on purchases, not revenue).
   // Spending = purchases + fees, net of refunds (a refund reverses a purchase).
@@ -462,6 +473,27 @@ const Dashboard = () => {
     [brandTxns, isProperty, inPropertyPeriod],
   );
 
+  // VOWIDEAS business cash flow (Chase ••7015) over the selected period: income
+  // in (deposits) vs expenses out (expense/fee/card payments) and owner draws/
+  // payroll out (outgoing transfers). Net = income − expenses − draws.
+  const businessFlow = useMemo(() => {
+    const txns = brandTxns.filter((t) => isBusiness(t) && (!activityFrom || t.date >= activityFrom));
+    const sum = (pred: (t: FinanceTransaction) => boolean) => txns.filter(pred).reduce((s, t) => s + t.amount, 0);
+    const income = sum((t) => t.type === 'income' || (t.type === 'transfer' && (t.category ?? '').startsWith('transfer_in')));
+    const refunds = sum((t) => t.type === 'refund');
+    const expenses = sum((t) => t.type === 'expense' || t.type === 'fee' || t.type === 'payment') - refunds;
+    const draws = sum((t) => t.type === 'transfer' && (t.category ?? '').startsWith('transfer_out'));
+    return { income, expenses, draws, net: income - expenses - draws };
+  }, [brandTxns, isBusiness, activityFrom]);
+
+  const businessTxns = useMemo(
+    () => brandTxns
+      .filter((t) => isBusiness(t) && (!activityFrom || t.date >= activityFrom))
+      .slice()
+      .sort((a, b) => ((a.createdAt ?? a.date) < (b.createdAt ?? b.date) ? 1 : -1)),
+    [brandTxns, isBusiness, activityFrom],
+  );
+
   // Month-over-month spending: net spend (purchases + fees − refunds) per
   // calendar month for the trailing 12 months, from the first month with data
   // up to now. Gaps fill as 0; the current (in-progress) month is flagged partial.
@@ -476,7 +508,7 @@ const Dashboard = () => {
     const byMonth = new Map<string, number>();
     for (const t of brandTxns) {
       if (t.type !== 'expense' && t.type !== 'fee' && t.type !== 'refund') continue;
-      if ((t.accountId && michaelAccountIds.has(t.accountId)) || isProperty(t)) continue;
+      if ((t.accountId && michaelAccountIds.has(t.accountId)) || !isPersonal(t)) continue;
       const key = t.date.slice(0, 7); // YYYY-MM
       byMonth.set(key, (byMonth.get(key) ?? 0) + (t.type === 'refund' ? -t.amount : t.amount));
     }
@@ -497,7 +529,7 @@ const Dashboard = () => {
       });
     }
     return out;
-  }, [brandTxns, michaelAccountIds, isProperty]);
+  }, [brandTxns, michaelAccountIds, isPersonal]);
   // Trend read on COMPLETE months only (the current month is partial, so comparing
   // it would falsely look "down"). Average line covers the completed months.
   const spendInsight = useMemo(() => {
@@ -514,8 +546,8 @@ const Dashboard = () => {
   // Property-account (TD) charges are excluded: those are rental costs, shown in
   // the Properties tab, not personal subscriptions.
   const recurring = useMemo(
-    () => detectRecurring(brandTxns.filter((t) => !isProperty(t))),
-    [brandTxns, isProperty],
+    () => detectRecurring(brandTxns.filter((t) => isPersonal(t))),
+    [brandTxns, isPersonal],
   );
   const recurringMonthly = recurring.reduce((s, r) => s + r.monthlyEquivalent, 0);
 
@@ -619,7 +651,7 @@ const Dashboard = () => {
   const monthBreakdown = useMemo(() => {
     if (!selectedMonth) return null;
     const inMonth = (t: FinanceTransaction) =>
-      t.date.slice(0, 7) === selectedMonth && !(t.accountId && michaelAccountIds.has(t.accountId)) && !isProperty(t);
+      t.date.slice(0, 7) === selectedMonth && !(t.accountId && michaelAccountIds.has(t.accountId)) && isPersonal(t);
     const txns = [
       ...brandTxns.filter((t) => inMonth(t) && (t.type === 'expense' || t.type === 'fee')),
       ...brandTxns.filter((t) => inMonth(t) && t.type === 'refund').map((t) => ({ ...t, amount: -t.amount })),
@@ -633,7 +665,7 @@ const Dashboard = () => {
       txns,
       period: label,
     };
-  }, [selectedMonth, brandTxns, michaelAccountIds, isProperty]);
+  }, [selectedMonth, brandTxns, michaelAccountIds, isPersonal]);
 
   // Cards needing attention: overdue, or due within 7 days with a balance owed.
   const attentionCards = useMemo(
@@ -1114,13 +1146,15 @@ const Dashboard = () => {
             <div className="flex items-center justify-between flex-wrap gap-3 pt-2">
               <SectionTitle icon={TrendingUp}>Insights</SectionTitle>
               <div className="inline-flex items-center gap-1 rounded-xl bg-muted p-1">
-                {(['spending', 'activity', 'recurring', 'properties', 'projection'] as const)
-                  .filter((t) => (t !== 'projection' || forecast.length > 0) && (t !== 'properties' || propertyAccountIds.size > 0))
+                {(['spending', 'activity', 'recurring', 'properties', 'business', 'projection'] as const)
+                  .filter((t) => (t !== 'projection' || forecast.length > 0)
+                    && (t !== 'properties' || propertyAccountIds.size > 0)
+                    && (t !== 'business' || businessAccountIds.size > 0))
                   .map((t) => (
                     <button key={t} type="button" onClick={() => setInsightTab(t)}
                       className={cn('px-3.5 h-8 rounded-lg text-sm font-medium transition-colors capitalize',
                         insightTab === t ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
-                      {t}
+                      {t === 'business' ? 'VOWIDEAS' : t}
                     </button>
                   ))}
               </div>
@@ -1264,7 +1298,7 @@ const Dashboard = () => {
                   <div className="space-y-2 max-h-96 overflow-y-auto overflow-x-hidden -mx-2 px-2">
                     {propertyTxns.slice(0, 100).map((t) => (
                       <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)}
-                        property={isProperty(t)}
+                        tag={classify(t)}
                         onSetTag={(tag) => setMerchantTag(merchantKey(t), tag)} />
                     ))}
                   </div>
@@ -1283,14 +1317,13 @@ const Dashboard = () => {
                           <span className="text-sm truncate capitalize min-w-0">{key}</span>
                           <div className="flex items-center gap-2 shrink-0">
                             <div className="inline-flex rounded-full border border-border overflow-hidden text-[10px] font-semibold">
-                              <button type="button" onClick={() => setMerchantTag(key, 'personal')}
-                                className={cn('px-2 py-0.5 transition-colors', tag === 'personal' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>
-                                Personal
-                              </button>
-                              <button type="button" onClick={() => setMerchantTag(key, 'property')}
-                                className={cn('px-2 py-0.5 border-l border-border transition-colors', tag === 'property' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>
-                                Property
-                              </button>
+                              {(['personal', 'property', 'business'] as TxnTag[]).map((opt, i) => (
+                                <button key={opt} type="button" onClick={() => setMerchantTag(key, opt)}
+                                  className={cn('px-2 py-0.5 transition-colors capitalize', i > 0 && 'border-l border-border',
+                                    tag === opt ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>
+                                  {opt}
+                                </button>
+                              ))}
                             </div>
                             <button type="button" onClick={() => removeMerchantTag(key)} title="Remove rule (revert to default)"
                               className="text-muted-foreground hover:text-destructive text-sm leading-none px-1">✕</button>
@@ -1298,6 +1331,47 @@ const Dashboard = () => {
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* VOWIDEAS business cash flow (Chase ••7015) */}
+            {insightTab === 'business' && businessAccountIds.size > 0 && (
+              <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <SectionTitle icon={Building2}>VOWIDEAS (Business)</SectionTitle>
+                  <div className="flex items-center gap-1">
+                    <RangeChip onClick={() => setActivityPeriod('month')} active={activityPeriod === 'month'}>This Month</RangeChip>
+                    <RangeChip onClick={() => setActivityPeriod('90d')} active={activityPeriod === '90d'}>90d</RangeChip>
+                    <RangeChip onClick={() => setActivityPeriod('ytd')} active={activityPeriod === 'ytd'}>YTD</RangeChip>
+                    <RangeChip onClick={() => setActivityPeriod('all')} active={activityPeriod === 'all'}>All</RangeChip>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Cash flow through your business account (Chase ••7015) — every deposit is income. Kept separate from personal.
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mt-3">
+                  <Flow label="Income in" value={businessFlow.income} icon={ArrowDownRight} tone="success" />
+                  <Flow label="Expenses out" value={businessFlow.expenses} icon={ArrowUpRight} tone="warning" />
+                  <Flow label="Payroll / draws" value={businessFlow.draws} icon={CardIcon} tone="muted" />
+                  <div className="flex items-center justify-between sm:justify-end sm:gap-2" title="Income − expenses − draws">
+                    <span className="text-sm font-medium">Net</span>
+                    <span className={cn('text-sm font-bold', businessFlow.net >= 0 ? 'text-success' : 'text-destructive')}>
+                      {fmtMoney(businessFlow.net, { cents: true })}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground mt-5 mb-2">Business transactions</p>
+                {businessTxns.length === 0 ? (
+                  <Empty>No business transactions in this period.</Empty>
+                ) : (
+                  <div className="space-y-2 max-h-96 overflow-y-auto overflow-x-hidden -mx-2 px-2">
+                    {businessTxns.slice(0, 100).map((t) => (
+                      <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)}
+                        tag={classify(t)}
+                        onSetTag={(tag) => setMerchantTag(merchantKey(t), tag)} />
+                    ))}
                   </div>
                 )}
               </div>
@@ -1314,7 +1388,7 @@ const Dashboard = () => {
                   <div className="space-y-2 mt-3 max-h-96 overflow-y-auto overflow-x-hidden -mx-2 px-2">
                     {payments.slice(0, 50).map((t) => (
                       <TxnRow key={t.id} txn={t} source={paymentDestCard(t) ? `→ ${paymentDestCard(t)}` : sourceOf(t)}
-                        property={isProperty(t)}
+                        tag={classify(t)}
                         onSetTag={(tag) => setMerchantTag(merchantKey(t), tag)} />
                     ))}
                   </div>
@@ -1328,7 +1402,7 @@ const Dashboard = () => {
                   <div className="space-y-2 mt-3 max-h-96 overflow-y-auto overflow-x-hidden -mx-2 px-2">
                     {recentTxns.slice(0, 50).map((t) => (
                       <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)}
-                        property={isProperty(t)}
+                        tag={classify(t)}
                         onSetTag={(tag) => setMerchantTag(merchantKey(t), tag)} />
                     ))}
                   </div>
@@ -2293,9 +2367,9 @@ function payeeAndVia(rawName: string, proc: string | null): { name: string; show
   return { name: cleaned, showVia: true };
 }
 
-function TxnRow({ txn, source, isNew, property, onSetTag }: {
+function TxnRow({ txn, source, isNew, tag, onSetTag }: {
   txn: FinanceTransaction; source?: string | null; isNew?: boolean;
-  property?: boolean; onSetTag?: (tag: 'personal' | 'property') => void;
+  tag?: TxnTag; onSetTag?: (tag: TxnTag) => void;
 }) {
   // Money coming in: deposits, refunds, and incoming transfers (Zelle/bank in).
   const inflow = txn.type === 'income' || txn.type === 'refund'
@@ -2331,14 +2405,13 @@ function TxnRow({ txn, source, isNew, property, onSetTag }: {
         {onSetTag && (
           <div className="inline-flex rounded-full border border-border overflow-hidden text-[10px] font-semibold shrink-0"
             title="Tag this payee — applies to all its charges, past & future">
-            <button type="button" onClick={(e) => { e.stopPropagation(); onSetTag('personal'); }}
-              className={cn('px-2 py-0.5 transition-colors', !property ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>
-              Personal
-            </button>
-            <button type="button" onClick={(e) => { e.stopPropagation(); onSetTag('property'); }}
-              className={cn('px-2 py-0.5 border-l border-border transition-colors', property ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>
-              Property
-            </button>
+            {(['personal', 'property', 'business'] as TxnTag[]).map((opt, i) => (
+              <button key={opt} type="button" onClick={(e) => { e.stopPropagation(); onSetTag(opt); }}
+                className={cn('px-2 py-0.5 transition-colors capitalize', i > 0 && 'border-l border-border',
+                  tag === opt ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>
+                {opt}
+              </button>
+            ))}
           </div>
         )}
         <span className={cn('font-semibold tabular-nums text-right whitespace-nowrap', inflow ? 'text-success' : 'text-foreground')}>
