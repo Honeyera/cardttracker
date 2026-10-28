@@ -165,11 +165,11 @@ serve(async (req) => {
         const logoField = instLogo ? { logo_url: instLogo } : {};
 
         // Map Plaid account_id -> { kind, ourId } for linking transactions.
-        const map = new Map<string, { kind: "account" | "card" }>();
+        const map = new Map<string, { kind: "account" | "card"; mask: string | null }>();
 
         for (const a of plaidAccounts) {
           const isCredit = a.type === "credit";
-          map.set(a.account_id, { kind: isCredit ? "card" : "account" });
+          map.set(a.account_id, { kind: isCredit ? "card" : "account", mask: a.mask ?? null });
           const bal = a.balances ?? {};
           if (isCredit) {
             await admin.from("credit_cards").upsert(
@@ -306,10 +306,18 @@ serve(async (req) => {
           }
         }
 
+        // Owner-specific: the VOWIDEAS business checking (Chase ••7015) — every
+        // deposit into it is business income (even if it arrives as an RTP
+        // "Instant Payment Credit" or other transfer_in).
+        const BUSINESS_INCOME_MASKS = new Set(["7015"]);
         const toRow = (t: any) => {
           const link = map.get(t.account_id);
           const isCredit = link?.kind === "card";
-          const { type, amount } = classifyTxn(t, isCredit);
+          let { type, amount } = classifyTxn(t, isCredit);
+          // Money IN to a business account (Plaid credit = negative amount) is income.
+          if (!isCredit && link?.mask && BUSINESS_INCOME_MASKS.has(link.mask) && Number(t.amount) < 0) {
+            type = "income";
+          }
           return {
             user_id: OWNER_USER_ID,
             external_id: t.transaction_id,
