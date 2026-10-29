@@ -23,7 +23,7 @@ import {
   Wallet, LayoutDashboard, CreditCard as CardIcon, Trophy, Loader2, Building2,
   ArrowDownRight, ArrowUpRight, Landmark, TrendingUp, TrendingDown, AlertTriangle,
   CheckCircle2, CalendarClock, RefreshCw, Bell, ChevronRight, Percent, Megaphone, X, Repeat,
-  Sun, Moon,
+  Sun, Moon, PieChart as PieChartIcon,
 } from 'lucide-react';
 
 const fmtMoney = (n: number, opts: { cents?: boolean } = {}) =>
@@ -45,6 +45,52 @@ const fmtCompact = (n: number) => (n >= 1000 ? `$${Math.round(n / 1000)}k` : fmt
 const BT_PROMOS: { last4: string; endDate: string; goToApr: number }[] = [
   { last4: '6125', endDate: '2027-06-30', goToApr: 18 }, // BofA Cash Card
 ];
+
+// Spending-by-category donut palette — validated (CVD-safe, both modes) via the
+// dataviz skill against the app's card surfaces. Fixed order, never cycled; a 9th
+// category folds into a neutral "Everything else" (CAT_OTHER). Dark = same 8 hues
+// re-stepped for the dark surface.
+const CAT_COLORS_LIGHT = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'];
+const CAT_COLORS_DARK = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'];
+const CAT_OTHER = '#898781'; // neutral gray, same in both modes
+
+// Map Plaid's raw category codes (detailed PFC, lowercased) to friendly labels,
+// matching the familiar names on a spending report. Longest/most-specific prefixes
+// first — the first match wins.
+function categoryLabel(t: FinanceTransaction): string {
+  const c = (t.category ?? '').toLowerCase();
+  if (!c) return 'Uncategorized';
+  const map: [string, string][] = [
+    ['food_and_drink_groceries', 'Groceries'],
+    ['food_and_drink', 'Food & Dining'],
+    ['transportation_gas', 'Gas'],
+    ['transportation', 'Transportation'],
+    ['travel', 'Travel'],
+    ['general_merchandise_clothing', 'Clothing'],
+    ['general_merchandise_electronics', 'Electronics'],
+    ['general_merchandise', 'Shopping'],
+    ['home_improvement', 'Home Improvement'],
+    ['rent_and_utilities_rent', 'Rent'],
+    ['rent_and_utilities_internet', 'Internet & Cable'],
+    ['rent_and_utilities_telephone', 'Phone'],
+    ['rent_and_utilities', 'Utilities'],
+    ['loan_payments_mortgage', 'Mortgage'],
+    ['loan_payments_car', 'Car Payment'],
+    ['loan_payments_student', 'Student Loan'],
+    ['loan_payments_personal', 'Personal Loan'],
+    ['loan_payments', 'Loan Payment'],
+    ['medical', 'Medical'],
+    ['personal_care', 'Personal Care'],
+    ['entertainment', 'Entertainment'],
+    ['general_services_insurance', 'Insurance'],
+    ['general_services', 'Services'],
+    ['bank_fees', 'Fees'],
+    ['government_and_non_profit', 'Taxes & Gov'],
+  ];
+  for (const [prefix, label] of map) if (c.startsWith(prefix)) return label;
+  // Fallback: title-case the primary category (first two tokens).
+  return c.split('_').slice(0, 2).join(' ').replace(/\b\w/g, (m) => m.toUpperCase());
+}
 
 // Owner-specific: fix recurring-charge labels where Plaid's merchant guess is
 // wrong. Keyed by the detected (title-cased) label, lowercased.
@@ -253,7 +299,8 @@ const Dashboard = () => {
   const [cardSort, setCardSort] = useState<CardSort>('urgency');
   const [activityDetail, setActivityDetail] = useState<null | 'income' | 'spend' | 'payments'>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null); // YYYY-MM clicked on the spend chart
-  const [insightTab, setInsightTab] = useState<'spending' | 'activity' | 'recurring' | 'properties' | 'business' | 'projection'>('spending');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null); // category drill-down in the Categories tab
+  const [insightTab, setInsightTab] = useState<'spending' | 'categories' | 'activity' | 'recurring' | 'properties' | 'business' | 'projection'>('spending');
   // Dismissed alerts, keyed by a per-cycle signature so they return when action
   // is next needed (e.g. new due date / new statement). Persisted per browser.
   const [dismissed, setDismissed] = useState<Set<string>>(() => {
@@ -369,6 +416,13 @@ const Dashboard = () => {
   // VOWIDEAS business checking (Chase ••7015): default bucket = business.
   const businessAccountIds = useMemo(
     () => new Set(accounts.filter((a) => a.lastFour === '7015').map((a) => a.id)),
+    [accounts],
+  );
+
+  // Michael's CHK ('0015') — excluded from the Monthly Spending chart (and the
+  // category breakdown), but not from the rest of my figures.
+  const michaelAccountIds = useMemo(
+    () => new Set(accounts.filter((a) => a.lastFour === '0015').map((a) => a.id)),
     [accounts],
   );
 
@@ -501,16 +555,66 @@ const Dashboard = () => {
     [brandTxns, isBusiness, activityFrom],
   );
 
+  // Spending by category ("all money out"): every outflow — purchases, fees, and
+  // real debt service (mortgage/car/other loans) — but NOT transfers, card
+  // payments (the purchases they pay for are already counted), or property/
+  // business. Refunds net against their category.
+  const categoryOutflow = useCallback((t: FinanceTransaction): number => {
+    if (t.type === 'expense' || t.type === 'fee') return t.amount;
+    if (t.type === 'refund') return -t.amount;
+    if (t.type === 'payment' && !t.creditCardId) {
+      const c = t.category ?? '';
+      if (c.startsWith('loan_payments') && !c.includes('credit_card')) return t.amount;
+    }
+    return 0;
+  }, []);
+  const inCategoryScope = useCallback((t: FinanceTransaction) =>
+    (!activityFrom || t.date >= activityFrom)
+    && isPersonal(t)
+    && !(t.accountId && michaelAccountIds.has(t.accountId)),
+    [activityFrom, isPersonal, michaelAccountIds]);
+  const categoryData = useMemo(() => {
+    const byCat = new Map<string, number>();
+    for (const t of brandTxns) {
+      const amt = categoryOutflow(t);
+      if (amt === 0 || !inCategoryScope(t)) continue;
+      const label = categoryLabel(t);
+      byCat.set(label, (byCat.get(label) ?? 0) + amt);
+    }
+    const entries = [...byCat.entries()]
+      .map(([label, amount]) => ({ label, amount: Math.round(amount * 100) / 100 }))
+      .filter((e) => e.amount > 0)
+      .sort((a, b) => b.amount - a.amount);
+    const colors = isDark ? CAT_COLORS_DARK : CAT_COLORS_LIGHT;
+    let slices: { key: string; label: string; amount: number; color: string }[];
+    let otherLabels: string[] = [];
+    if (entries.length > colors.length) {
+      otherLabels = entries.slice(colors.length).map((e) => e.label);
+      const otherAmt = Math.round(entries.slice(colors.length).reduce((s, e) => s + e.amount, 0) * 100) / 100;
+      slices = entries.slice(0, colors.length).map((e, i) => ({ key: e.label, label: e.label, amount: e.amount, color: colors[i] }));
+      if (otherAmt > 0) slices.push({ key: '__other__', label: 'Everything else', amount: otherAmt, color: CAT_OTHER });
+    } else {
+      slices = entries.map((e, i) => ({ key: e.label, label: e.label, amount: e.amount, color: colors[i] ?? CAT_OTHER }));
+    }
+    const total = Math.round(slices.reduce((s, e) => s + e.amount, 0) * 100) / 100;
+    return { slices: slices.map((s) => ({ ...s, pct: total > 0 ? s.amount / total : 0 })), total, otherLabels };
+  }, [brandTxns, categoryOutflow, inCategoryScope, isDark]);
+  const categoryTxns = useMemo(() => {
+    if (!selectedCategory) return [] as FinanceTransaction[];
+    const inSel = (t: FinanceTransaction) => selectedCategory === '__other__'
+      ? categoryData.otherLabels.includes(categoryLabel(t))
+      : categoryLabel(t) === selectedCategory;
+    return brandTxns
+      .filter((t) => categoryOutflow(t) > 0 && inCategoryScope(t) && inSel(t))
+      .slice()
+      .sort((a, b) => ((a.createdAt ?? a.date) < (b.createdAt ?? b.date) ? 1 : -1));
+  }, [selectedCategory, brandTxns, categoryOutflow, inCategoryScope, categoryData.otherLabels]);
+
   // Month-over-month spending: net spend (purchases + fees − refunds) per
   // calendar month for the trailing 12 months, from the first month with data
   // up to now. Gaps fill as 0; the current (in-progress) month is flagged partial.
-  // Michael's CHK ('0015') is excluded from the Monthly Spending chart only (not
-  // mine). Property is handled separately via isProperty (tag-aware).
-  const michaelAccountIds = useMemo(
-    () => new Set(accounts.filter((a) => a.lastFour === '0015').map((a) => a.id)),
-    [accounts],
-  );
-
+  // Michael's CHK ('0015') is excluded here (not from the rest); property is
+  // handled separately via isProperty (tag-aware).
   const monthlySpend = useMemo(() => {
     const byMonth = new Map<string, number>();
     for (const t of brandTxns) {
@@ -1158,8 +1262,9 @@ const Dashboard = () => {
             <div className="flex items-center justify-between flex-wrap gap-3 pt-2">
               <SectionTitle icon={TrendingUp}>Insights</SectionTitle>
               <div className="inline-flex items-center gap-1 rounded-xl bg-muted p-1">
-                {(['spending', 'activity', 'recurring', 'properties', 'business', 'projection'] as const)
+                {(['spending', 'categories', 'activity', 'recurring', 'properties', 'business', 'projection'] as const)
                   .filter((t) => (t !== 'projection' || forecast.length > 0)
+                    && (t !== 'categories' || categoryData.total > 0)
                     && (t !== 'properties' || propertyAccountIds.size > 0)
                     && (t !== 'business' || businessAccountIds.size > 0))
                   .map((t) => (
@@ -1221,6 +1326,62 @@ const Dashboard = () => {
                 </p>
                 <MonthlySpendChart data={monthlySpend} average={spendInsight.avg} onSelectMonth={setSelectedMonth} />
                 <p className="text-[11px] text-muted-foreground mt-2">Tip: click a month to see what you spent on.</p>
+              </div>
+            )}
+
+            {/* Spending by category — donut + ranked legend of where money went. */}
+            {insightTab === 'categories' && categoryData.total > 0 && (
+              <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <SectionTitle icon={PieChartIcon}>Spending by Category</SectionTitle>
+                  <div className="flex items-center gap-1">
+                    <RangeChip onClick={() => setActivityPeriod('month')} active={activityPeriod === 'month'}>This Month</RangeChip>
+                    <RangeChip onClick={() => setActivityPeriod('90d')} active={activityPeriod === '90d'}>90d</RangeChip>
+                    <RangeChip onClick={() => setActivityPeriod('ytd')} active={activityPeriod === 'ytd'}>YTD</RangeChip>
+                    <RangeChip onClick={() => setActivityPeriod('all')} active={activityPeriod === 'all'}>All</RangeChip>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Where your money went — everything out (purchases, loans, rent &amp; bills), excluding transfers, card payments, and property/business.
+                </p>
+                <div className="grid gap-5 lg:grid-cols-[minmax(0,260px)_1fr] mt-4 items-center">
+                  <CategoryDonut data={categoryData.slices} total={categoryData.total}
+                    selected={selectedCategory}
+                    onSelect={(k) => setSelectedCategory((cur) => (cur === k ? null : k))} />
+                  <div className="grid gap-x-5 gap-y-0.5 sm:grid-cols-2">
+                    {categoryData.slices.map((s) => (
+                      <button key={s.key} type="button"
+                        onClick={() => setSelectedCategory((cur) => (cur === s.key ? null : s.key))}
+                        className={cn('flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left transition-colors',
+                          selectedCategory === s.key ? 'bg-muted' : 'hover:bg-muted/60')}>
+                        <span className="flex items-center gap-2 min-w-0">
+                          <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: s.color }} />
+                          <span className="text-sm truncate">{s.label}</span>
+                        </span>
+                        <span className="shrink-0 text-right whitespace-nowrap">
+                          <span className="text-sm font-semibold tabular-nums">{fmtMoney(s.amount)}</span>
+                          <span className="text-xs text-muted-foreground ml-1.5 tabular-nums">{(s.pct * 100).toFixed(1)}%</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {selectedCategory && (
+                  <div className="mt-4 border-t border-border pt-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
+                        {selectedCategory === '__other__' ? 'Everything else' : selectedCategory} · {categoryTxns.length} transaction{categoryTxns.length === 1 ? '' : 's'}
+                      </p>
+                      <button type="button" className="text-xs text-primary hover:underline" onClick={() => setSelectedCategory(null)}>Clear</button>
+                    </div>
+                    <div className="space-y-2 max-h-96 overflow-y-auto overflow-x-hidden -mx-2 px-2">
+                      {categoryTxns.slice(0, 100).map((t) => (
+                        <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <p className="text-[11px] text-muted-foreground mt-3">Tip: click a category to see the transactions behind it.</p>
               </div>
             )}
 
@@ -2021,6 +2182,50 @@ function SpendTooltip({ active, payload }: { active?: boolean; payload?: { paylo
     <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-md text-sm">
       <p className="font-medium text-card-foreground">{p.label}{p.partial ? ' (so far)' : ''}</p>
       <p className="text-muted-foreground">{fmtMoney(p.total, { cents: true })} spent</p>
+    </div>
+  );
+}
+
+type CategorySlice = { key: string; label: string; amount: number; color: string; pct: number };
+
+// Spending-by-category donut: magnitude-by-identity, so a validated categorical
+// palette (fixed order, 8 hues + a neutral "Everything else"). The ranked legend
+// beside it carries each label + $ + %, so identity never rests on color alone.
+// Selecting a slice dims the rest and drills into its transactions. Drawn as plain
+// SVG arcs (stroke-dasharray on concentric circles) — no chart lib, no extra deps.
+function CategoryDonut({ data, total, selected, onSelect }: {
+  data: CategorySlice[]; total: number; selected: string | null; onSelect: (key: string) => void;
+}) {
+  const size = 240, stroke = 34, r = (size - stroke) / 2, c = size / 2;
+  const circ = 2 * Math.PI * r;
+  const gap = data.length > 1 ? 2 : 0; // 2px surface gap between adjacent arcs
+  let acc = 0; // cumulative fraction, drawn clockwise from 12 o'clock
+  const arcs = data.map((s) => {
+    const len = Math.max(0, s.pct * circ - gap);
+    const seg = { s, dasharray: `${len} ${circ - len}`, dashoffset: -acc * circ };
+    acc += s.pct;
+    return seg;
+  });
+  return (
+    <div className="relative mx-auto" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Spending by category">
+        <g transform={`rotate(-90 ${c} ${c})`}>
+          {arcs.map(({ s, dasharray, dashoffset }) => (
+            <circle key={s.key} cx={c} cy={c} r={r} fill="none"
+              stroke={s.color} strokeWidth={stroke}
+              strokeDasharray={dasharray} strokeDashoffset={dashoffset}
+              opacity={selected && selected !== s.key ? 0.3 : 1}
+              style={{ cursor: 'pointer', transition: 'opacity .15s' }}
+              onClick={() => onSelect(s.key)}>
+              <title>{s.label}: {fmtMoney(s.amount, { cents: true })} ({(s.pct * 100).toFixed(1)}%)</title>
+            </circle>
+          ))}
+        </g>
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+        <span className="text-2xl font-bold tabular-nums leading-none">{fmtMoney(total)}</span>
+        <span className="text-xs text-muted-foreground mt-1">Total</span>
+      </div>
     </div>
   );
 }
