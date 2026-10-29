@@ -12,6 +12,7 @@ import { cardColorClasses, CardColor } from '@/types/creditCard';
 import { UserMenu } from '@/components/UserMenu';
 import { AskBox } from '@/components/AskBox';
 import { ConnectBank } from '@/components/ConnectBank';
+import { ForceMfaSetup } from '@/components/ForceMfaSetup';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -295,6 +296,17 @@ const Dashboard = () => {
   // Owner = the person who owns the finance rows (vs. a granted view-only user,
   // who only sees the owner's rows they were granted). Gates the admin UI.
   const isOwner = useMemo(() => !!user && accounts.some((a) => a.userId === user.id), [user, accounts]);
+  // Require 2FA for everyone: a signed-in user with no verified authenticator
+  // factor sits at aal1/aal1 — block them on a mandatory enrollment screen.
+  const [needsMfa, setNeedsMfa] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!user) { setNeedsMfa(null); return; }
+    supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+      .then(({ data }) => { if (!cancelled) setNeedsMfa(data?.currentLevel === 'aal1' && data?.nextLevel === 'aal1'); })
+      .catch(() => { if (!cancelled) setNeedsMfa(false); });
+    return () => { cancelled = true; };
+  }, [user]);
   const [company, setCompany] = useState('all');
   const [selectedCard, setSelectedCard] = useState<FinanceCard | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<FinanceAccount | null>(null);
@@ -919,6 +931,11 @@ const Dashboard = () => {
     );
   }
 
+  // Mandatory 2FA: block the app until the signed-in user has enrolled.
+  if (needsMfa === true) {
+    return <ForceMfaSetup onDone={() => setNeedsMfa(false)} onSignOut={async () => { await signOut(); navigate('/auth'); }} />;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-card border-b border-border sticky top-0 z-10">
@@ -955,7 +972,7 @@ const Dashboard = () => {
                 Synced {fmtDateTime(lastSyncedAt)}
               </span>
             )}
-            <ConnectBank onSynced={refreshFinance} />
+            {isOwner && <ConnectBank onSynced={refreshFinance} />}
             {companies.length > 0 && (
               <div className="flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-muted-foreground" />
@@ -1157,8 +1174,8 @@ const Dashboard = () => {
             {/* KPI row removed — the hero already shows net cash / available /
                 debt / credit. The Ask box moved to the bottom (it's a utility). */}
 
-            {/* 0% balance-transfer promo payoff tracker */}
-            {btPromos.filter((p) => p.remaining > 0.005).map((p) => (
+            {/* 0% balance-transfer promo payoff tracker (owner-only) */}
+            {isOwner && btPromos.filter((p) => p.remaining > 0.005).map((p) => (
               <div key={p.card.id} className={cn('rounded-2xl border bg-card p-5 shadow-sm',
                 p.daysLeft <= 90 || !p.onTrack ? 'border-warning/40' : 'border-border')}>
                 <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1276,8 +1293,8 @@ const Dashboard = () => {
                 {(['spending', 'categories', 'activity', 'recurring', 'properties', 'business', 'projection'] as const)
                   .filter((t) => (t !== 'projection' || forecast.length > 0)
                     && (t !== 'categories' || categoryData.total > 0 || categorySource != null)
-                    && (t !== 'properties' || propertyAccountIds.size > 0)
-                    && (t !== 'business' || businessAccountIds.size > 0))
+                    && (t !== 'properties' || (isOwner && propertyAccountIds.size > 0))
+                    && (t !== 'business' || (isOwner && businessAccountIds.size > 0)))
                   .map((t) => (
                     <button key={t} type="button" onClick={() => setInsightTab(t)}
                       className={cn('px-3.5 h-8 rounded-lg text-sm font-medium transition-colors capitalize',
@@ -1469,7 +1486,7 @@ const Dashboard = () => {
             )}
 
             {/* Properties: rental cash flow through the TD account, kept out of personal spend/income */}
-            {insightTab === 'properties' && propertyAccountIds.size > 0 && (
+            {insightTab === 'properties' && isOwner && propertyAccountIds.size > 0 && (
               <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <SectionTitle icon={Landmark}>Rental Properties</SectionTitle>
@@ -1503,7 +1520,7 @@ const Dashboard = () => {
                     {propertyTxns.slice(0, 100).map((t) => (
                       <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)}
                         tag={classify(t)}
-                        onSetTag={(tag) => setMerchantTag(merchantKey(t), tag)} />
+                        onSetTag={isOwner ? (tag) => setMerchantTag(merchantKey(t), tag) : undefined} />
                     ))}
                   </div>
                 )}
@@ -1541,7 +1558,7 @@ const Dashboard = () => {
             )}
 
             {/* VOWIDEAS business cash flow (Chase ••7015) */}
-            {insightTab === 'business' && businessAccountIds.size > 0 && (
+            {insightTab === 'business' && isOwner && businessAccountIds.size > 0 && (
               <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <SectionTitle icon={Building2}>VOWIDEAS (Business)</SectionTitle>
@@ -1574,7 +1591,7 @@ const Dashboard = () => {
                     {businessTxns.slice(0, 100).map((t) => (
                       <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)}
                         tag={classify(t)} tagOptions={['personal', 'business']}
-                        onSetTag={(tag) => setMerchantTag(merchantKey(t), tag)} />
+                        onSetTag={isOwner ? (tag) => setMerchantTag(merchantKey(t), tag) : undefined} />
                     ))}
                   </div>
                 )}
@@ -1593,7 +1610,7 @@ const Dashboard = () => {
                     {payments.slice(0, 50).map((t) => (
                       <TxnRow key={t.id} txn={t} source={paymentDestCard(t) ? `→ ${paymentDestCard(t)}` : sourceOf(t)}
                         tag={classify(t)}
-                        onSetTag={(tag) => setMerchantTag(merchantKey(t), tag)} />
+                        onSetTag={isOwner ? (tag) => setMerchantTag(merchantKey(t), tag) : undefined} />
                     ))}
                   </div>
                 )}
@@ -1607,7 +1624,7 @@ const Dashboard = () => {
                     {recentTxns.slice(0, 50).map((t) => (
                       <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)}
                         tag={classify(t)}
-                        onSetTag={(tag) => setMerchantTag(merchantKey(t), tag)} />
+                        onSetTag={isOwner ? (tag) => setMerchantTag(merchantKey(t), tag) : undefined} />
                     ))}
                   </div>
                 )}
@@ -1638,8 +1655,8 @@ const Dashboard = () => {
               </div>
             )}
 
-            {/* Ask — AI Q&A about your finances; a utility, so it sits at the end */}
-            <AskBox accounts={accounts} cards={cards} transactions={transactions} />
+            {/* Ask — AI Q&A about your finances; a utility, so it sits at the end (owner-only) */}
+            {isOwner && <AskBox accounts={accounts} cards={cards} transactions={transactions} />}
 
           </>
         )}
