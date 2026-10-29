@@ -1666,14 +1666,14 @@ const Dashboard = () => {
         card={selectedCard}
         adSpend={selectedCard ? adSpendByCard.get(selectedCard.id) : undefined}
         transactions={selectedCard ? transactions.filter((t) => t.creditCardId === selectedCard.id) : []}
-        onColorChange={setCardColor}
-        onNameChange={setCardName}
+        onColorChange={isOwner ? setCardColor : undefined}
+        onNameChange={isOwner ? setCardName : undefined}
         onClose={() => setSelectedCard(null)}
       />
 
       <AccountDetailDialog
         account={selectedAccount}
-        onNameChange={setAccountName}
+        onNameChange={isOwner ? setAccountName : undefined}
         transactions={selectedAccount ? transactions.filter((t) => t.accountId === selectedAccount.id) : []}
         history={selectedAccount ? snapshots.filter((s) => s.accountId === selectedAccount.id) : []}
         onClose={() => setSelectedAccount(null)}
