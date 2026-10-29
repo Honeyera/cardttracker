@@ -8,19 +8,20 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { User, Key, UserPlus, LogOut, ShieldCheck } from 'lucide-react';
+import { User, Key, Users, LogOut, ShieldCheck } from 'lucide-react';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
-import { CreateUserDialog } from '@/components/CreateUserDialog';
+import { UsersAccessDialog } from '@/components/UsersAccessDialog';
 import { SecurityDialog } from '@/components/SecurityDialog';
 
 interface UserMenuProps {
   userEmail: string;
   onSignOut: () => void;
+  isOwner?: boolean;
 }
 
-export function UserMenu({ userEmail, onSignOut }: UserMenuProps) {
+export function UserMenu({ userEmail, onSignOut, isOwner = false }: UserMenuProps) {
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
-  const [createUserOpen, setCreateUserOpen] = useState(false);
+  const [usersAccessOpen, setUsersAccessOpen] = useState(false);
   const [securityOpen, setSecurityOpen] = useState(false);
 
   return (
@@ -44,10 +45,12 @@ export function UserMenu({ userEmail, onSignOut }: UserMenuProps) {
             <ShieldCheck className="w-4 h-4 mr-2" />
             Two-Factor Auth
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setCreateUserOpen(true)}>
-            <UserPlus className="w-4 h-4 mr-2" />
-            Create User
-          </DropdownMenuItem>
+          {isOwner && (
+            <DropdownMenuItem onSelect={() => setUsersAccessOpen(true)}>
+              <Users className="w-4 h-4 mr-2" />
+              Users &amp; Access
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={onSignOut}>
             <LogOut className="w-4 h-4 mr-2" />
@@ -60,10 +63,12 @@ export function UserMenu({ userEmail, onSignOut }: UserMenuProps) {
         open={changePasswordOpen}
         onOpenChange={setChangePasswordOpen}
       />
-      <CreateUserDialog
-        open={createUserOpen}
-        onOpenChange={setCreateUserOpen}
-      />
+      {isOwner && (
+        <UsersAccessDialog
+          open={usersAccessOpen}
+          onOpenChange={setUsersAccessOpen}
+        />
+      )}
       <SecurityDialog
         open={securityOpen}
         onOpenChange={setSecurityOpen}

@@ -13,6 +13,7 @@ export type TxnTag = 'personal' | 'property' | 'business';
 
 export interface FinanceAccount {
   id: string;
+  userId: string; // row owner — used to tell the owner apart from granted viewers
   name: string; // display name: user override (display_name) if set, else the synced name
   hasNameOverride: boolean; // true when display_name is set, so we can offer "reset to automatic"
   institution: string | null;
@@ -156,6 +157,7 @@ export function useFinanceData() {
       if (error) throw error;
       return (data ?? []).map((a: any) => ({
         id: a.id,
+        userId: a.user_id,
         // Prefer the user's explicit display_name (sync never touches it), then
         // the hardcoded override map, then the synced name.
         name: (a.display_name ?? '').trim() || ACCOUNT_NAME_OVERRIDES[last4(a.last_four)] || a.name,

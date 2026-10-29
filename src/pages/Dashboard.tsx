@@ -292,6 +292,9 @@ const Dashboard = () => {
     refreshFinance();
   };
   const { accounts, transactions, cards, alerts, forecast, snapshots, availablePoints, merchantTags, loading, lastSyncedAt } = useFinanceData();
+  // Owner = the person who owns the finance rows (vs. a granted view-only user,
+  // who only sees the owner's rows they were granted). Gates the admin UI.
+  const isOwner = useMemo(() => !!user && accounts.some((a) => a.userId === user.id), [user, accounts]);
   const [company, setCompany] = useState('all');
   const [selectedCard, setSelectedCard] = useState<FinanceCard | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<FinanceAccount | null>(null);
@@ -934,7 +937,7 @@ const Dashboard = () => {
               onClick={() => setTheme(isDark ? 'light' : 'dark')}>
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </Button>
-            <UserMenu userEmail={user?.email || ''} onSignOut={async () => { await signOut(); navigate('/auth'); }} />
+            <UserMenu userEmail={user?.email || ''} isOwner={isOwner} onSignOut={async () => { await signOut(); navigate('/auth'); }} />
           </div>
         </div>
       </header>
