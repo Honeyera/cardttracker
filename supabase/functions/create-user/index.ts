@@ -43,6 +43,16 @@ serve(async (req) => {
       );
     }
 
+    // Owner gate: only the data owner may create logins. Fails closed if the
+    // OWNER_USER_ID secret isn't set, so a non-owner can never create users.
+    const OWNER_USER_ID = Deno.env.get('OWNER_USER_ID') ?? '';
+    if (!OWNER_USER_ID || user.id !== OWNER_USER_ID) {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden — owner only' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Parse and validate input
     const requestData = await req.json();
     const validationResult = createUserSchema.safeParse(requestData);
