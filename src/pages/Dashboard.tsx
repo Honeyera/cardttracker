@@ -938,17 +938,17 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="bg-card border-b border-border sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
+      <header className="bg-card border-b border-border sticky top-0 z-10 pt-safe">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shrink-0">
               <Wallet className="w-5 h-5 text-primary-foreground" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">Personal Finance Tracker</h1>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-xl font-bold text-foreground truncate">Personal Finance Tracker</h1>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Button size="sm" variant="outline" className="w-9 px-0" aria-label="Toggle dark mode"
               title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
               onClick={() => setTheme(isDark ? 'light' : 'dark')}>
@@ -959,7 +959,7 @@ const Dashboard = () => {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+      <main className="max-w-6xl mx-auto px-4 py-6 space-y-6 pb-safe">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h2 className="text-lg font-semibold">{greeting}</h2>
@@ -1289,19 +1289,21 @@ const Dashboard = () => {
                 only one shows at a time (keeps the page from feeling busy). */}
             <div className="flex items-center justify-between flex-wrap gap-3 pt-2">
               <SectionTitle icon={TrendingUp}>Insights</SectionTitle>
-              <div className="inline-flex items-center gap-1 rounded-xl bg-muted p-1">
-                {(['spending', 'categories', 'activity', 'recurring', 'properties', 'business', 'projection'] as const)
-                  .filter((t) => (t !== 'projection' || forecast.length > 0)
-                    && (t !== 'categories' || categoryData.total > 0 || categorySource != null)
-                    && (t !== 'properties' || (isOwner && propertyAccountIds.size > 0))
-                    && (t !== 'business' || (isOwner && businessAccountIds.size > 0)))
-                  .map((t) => (
-                    <button key={t} type="button" onClick={() => setInsightTab(t)}
-                      className={cn('px-3.5 h-8 rounded-lg text-sm font-medium transition-colors capitalize',
-                        insightTab === t ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
-                      {t === 'business' ? 'VOWIDEAS' : t}
-                    </button>
-                  ))}
+              <div className="w-full sm:w-auto min-w-0 overflow-x-auto no-scrollbar">
+                <div className="inline-flex items-center gap-1 rounded-xl bg-muted p-1 w-max">
+                  {(['spending', 'categories', 'activity', 'recurring', 'properties', 'business', 'projection'] as const)
+                    .filter((t) => (t !== 'projection' || forecast.length > 0)
+                      && (t !== 'categories' || categoryData.total > 0 || categorySource != null)
+                      && (t !== 'properties' || (isOwner && propertyAccountIds.size > 0))
+                      && (t !== 'business' || (isOwner && businessAccountIds.size > 0)))
+                    .map((t) => (
+                      <button key={t} type="button" onClick={() => setInsightTab(t)}
+                        className={cn('px-3.5 h-8 rounded-lg text-sm font-medium transition-colors capitalize whitespace-nowrap shrink-0',
+                          insightTab === t ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+                        {t === 'business' ? 'VOWIDEAS' : t}
+                      </button>
+                    ))}
+                </div>
               </div>
             </div>
 

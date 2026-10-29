@@ -1,0 +1,17 @@
+{
+  "name": "Personal Finance Tracker",
+  "short_name": "Finance",
+  "description": "Your cards, accounts, and spending at a glance.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f7f8fb",
+  "theme_color": "#ffffff",
+  "icons": [
+    { "src": "/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" },
+    { "src": "/app-icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" }
+  ]
+}

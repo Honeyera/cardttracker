@@ -98,7 +98,22 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    /* App-like feel on phones: no grey tap flash, no rubber-band overscroll. */
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
     @apply bg-background text-foreground;
+    overscroll-behavior-y: none;
   }
+}
+
+@layer utilities {
+  /* Respect the notch / home indicator when launched full-screen (PWA). */
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .pb-safe { padding-bottom: calc(1.5rem + env(safe-area-inset-bottom)); }
+  /* Horizontal scroll strips (e.g. the Insights tabs) without a visible bar. */
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
 }
