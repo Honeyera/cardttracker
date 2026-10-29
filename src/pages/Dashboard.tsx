@@ -300,6 +300,7 @@ const Dashboard = () => {
   const [activityDetail, setActivityDetail] = useState<null | 'income' | 'spend' | 'payments'>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null); // YYYY-MM clicked on the spend chart
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null); // category drill-down in the Categories tab
+  const [categorySource, setCategorySource] = useState<string | null>(null); // Categories tab: filter to one card/account id (null = all)
   const [insightTab, setInsightTab] = useState<'spending' | 'categories' | 'activity' | 'recurring' | 'properties' | 'business' | 'projection'>('spending');
   // Dismissed alerts, keyed by a per-cycle signature so they return when action
   // is next needed (e.g. new due date / new statement). Persisted per browser.
@@ -568,11 +569,13 @@ const Dashboard = () => {
     }
     return 0;
   }, []);
-  const inCategoryScope = useCallback((t: FinanceTransaction) =>
-    (!activityFrom || t.date >= activityFrom)
-    && isPersonal(t)
-    && !(t.accountId && michaelAccountIds.has(t.accountId)),
-    [activityFrom, isPersonal, michaelAccountIds]);
+  const inCategoryScope = useCallback((t: FinanceTransaction) => {
+    if (activityFrom && t.date < activityFrom) return false;
+    // Filtered to one card/account: show everything on it (any tag). Otherwise the
+    // default view is personal-only (property/business/Michael excluded).
+    if (categorySource) return t.creditCardId === categorySource || t.accountId === categorySource;
+    return isPersonal(t) && !(t.accountId && michaelAccountIds.has(t.accountId));
+  }, [activityFrom, categorySource, isPersonal, michaelAccountIds]);
   const categoryData = useMemo(() => {
     const byCat = new Map<string, number>();
     for (const t of brandTxns) {
@@ -609,6 +612,11 @@ const Dashboard = () => {
       .slice()
       .sort((a, b) => ((a.createdAt ?? a.date) < (b.createdAt ?? b.date) ? 1 : -1));
   }, [selectedCategory, brandTxns, categoryOutflow, inCategoryScope, categoryData.otherLabels]);
+  // Cards + accounts, for the "filter by card" selector on the Categories tab.
+  const categorySources = useMemo(() => [
+    ...cards.map((c) => ({ id: c.id, label: `${c.name} ••${c.lastFour}` })),
+    ...accounts.map((a) => ({ id: a.id, label: `${a.name} ••${a.lastFour}` })),
+  ], [cards, accounts]);
 
   // Month-over-month spending: net spend (purchases + fees − refunds) per
   // calendar month for the trailing 12 months, from the first month with data
@@ -1264,7 +1272,7 @@ const Dashboard = () => {
               <div className="inline-flex items-center gap-1 rounded-xl bg-muted p-1">
                 {(['spending', 'categories', 'activity', 'recurring', 'properties', 'business', 'projection'] as const)
                   .filter((t) => (t !== 'projection' || forecast.length > 0)
-                    && (t !== 'categories' || categoryData.total > 0)
+                    && (t !== 'categories' || categoryData.total > 0 || categorySource != null)
                     && (t !== 'properties' || propertyAccountIds.size > 0)
                     && (t !== 'business' || businessAccountIds.size > 0))
                   .map((t) => (
@@ -1330,58 +1338,78 @@ const Dashboard = () => {
             )}
 
             {/* Spending by category — donut + ranked legend of where money went. */}
-            {insightTab === 'categories' && categoryData.total > 0 && (
+            {insightTab === 'categories' && (
               <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <SectionTitle icon={PieChartIcon}>Spending by Category</SectionTitle>
-                  <div className="flex items-center gap-1">
-                    <RangeChip onClick={() => setActivityPeriod('month')} active={activityPeriod === 'month'}>This Month</RangeChip>
-                    <RangeChip onClick={() => setActivityPeriod('90d')} active={activityPeriod === '90d'}>90d</RangeChip>
-                    <RangeChip onClick={() => setActivityPeriod('ytd')} active={activityPeriod === 'ytd'}>YTD</RangeChip>
-                    <RangeChip onClick={() => setActivityPeriod('all')} active={activityPeriod === 'all'}>All</RangeChip>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Select value={categorySource ?? 'all'}
+                      onValueChange={(v) => { setCategorySource(v === 'all' ? null : v); setSelectedCategory(null); }}>
+                      <SelectTrigger className="h-8 w-[210px] text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All cards &amp; accounts</SelectItem>
+                        {categorySources.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="flex items-center gap-1">
+                      <RangeChip onClick={() => setActivityPeriod('month')} active={activityPeriod === 'month'}>This Month</RangeChip>
+                      <RangeChip onClick={() => setActivityPeriod('90d')} active={activityPeriod === '90d'}>90d</RangeChip>
+                      <RangeChip onClick={() => setActivityPeriod('ytd')} active={activityPeriod === 'ytd'}>YTD</RangeChip>
+                      <RangeChip onClick={() => setActivityPeriod('all')} active={activityPeriod === 'all'}>All</RangeChip>
+                    </div>
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Where your money went — everything out (purchases, loans, rent &amp; bills), excluding transfers, card payments, and property/business.
+                  {categorySource
+                    ? <>Spending on <span className="font-medium text-foreground">{categorySources.find((s) => s.id === categorySource)?.label ?? 'this card'}</span>, by category — everything out on it in the period.</>
+                    : <>Where your money went — everything out (purchases, loans, rent &amp; bills), excluding transfers, card payments, and property/business.</>}
                 </p>
-                <div className="grid gap-5 lg:grid-cols-[minmax(0,260px)_1fr] mt-4 items-center">
-                  <CategoryDonut data={categoryData.slices} total={categoryData.total}
-                    selected={selectedCategory}
-                    onSelect={(k) => setSelectedCategory((cur) => (cur === k ? null : k))} />
-                  <div className="grid gap-x-5 gap-y-0.5 sm:grid-cols-2">
-                    {categoryData.slices.map((s) => (
-                      <button key={s.key} type="button"
-                        onClick={() => setSelectedCategory((cur) => (cur === s.key ? null : s.key))}
-                        className={cn('flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left transition-colors',
-                          selectedCategory === s.key ? 'bg-muted' : 'hover:bg-muted/60')}>
-                        <span className="flex items-center gap-2 min-w-0">
-                          <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: s.color }} />
-                          <span className="text-sm truncate">{s.label}</span>
-                        </span>
-                        <span className="shrink-0 text-right whitespace-nowrap">
-                          <span className="text-sm font-semibold tabular-nums">{fmtMoney(s.amount)}</span>
-                          <span className="text-xs text-muted-foreground ml-1.5 tabular-nums">{(s.pct * 100).toFixed(1)}%</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {selectedCategory && (
-                  <div className="mt-4 border-t border-border pt-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
-                        {selectedCategory === '__other__' ? 'Everything else' : selectedCategory} · {categoryTxns.length} transaction{categoryTxns.length === 1 ? '' : 's'}
-                      </p>
-                      <button type="button" className="text-xs text-primary hover:underline" onClick={() => setSelectedCategory(null)}>Clear</button>
+                {categoryData.total > 0 ? (
+                  <>
+                    <div className="grid gap-5 lg:grid-cols-[minmax(0,260px)_1fr] mt-4 items-center">
+                      <CategoryDonut data={categoryData.slices} total={categoryData.total}
+                        selected={selectedCategory}
+                        onSelect={(k) => setSelectedCategory((cur) => (cur === k ? null : k))} />
+                      <div className="grid gap-x-5 gap-y-0.5 sm:grid-cols-2">
+                        {categoryData.slices.map((s) => (
+                          <button key={s.key} type="button"
+                            onClick={() => setSelectedCategory((cur) => (cur === s.key ? null : s.key))}
+                            className={cn('flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left transition-colors',
+                              selectedCategory === s.key ? 'bg-muted' : 'hover:bg-muted/60')}>
+                            <span className="flex items-center gap-2 min-w-0">
+                              <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: s.color }} />
+                              <span className="text-sm truncate">{s.label}</span>
+                            </span>
+                            <span className="shrink-0 text-right whitespace-nowrap">
+                              <span className="text-sm font-semibold tabular-nums">{fmtMoney(s.amount)}</span>
+                              <span className="text-xs text-muted-foreground ml-1.5 tabular-nums">{(s.pct * 100).toFixed(1)}%</span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div className="space-y-2 max-h-96 overflow-y-auto overflow-x-hidden -mx-2 px-2">
-                      {categoryTxns.slice(0, 100).map((t) => (
-                        <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)} />
-                      ))}
-                    </div>
-                  </div>
+                    {selectedCategory && (
+                      <div className="mt-4 border-t border-border pt-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
+                            {selectedCategory === '__other__' ? 'Everything else' : selectedCategory} · {categoryTxns.length} transaction{categoryTxns.length === 1 ? '' : 's'}
+                          </p>
+                          <button type="button" className="text-xs text-primary hover:underline" onClick={() => setSelectedCategory(null)}>Clear</button>
+                        </div>
+                        <div className="space-y-2 max-h-96 overflow-y-auto overflow-x-hidden -mx-2 px-2">
+                          {categoryTxns.slice(0, 100).map((t) => (
+                            <TxnRow key={t.id} txn={t} source={sourceOf(t)} isNew={isNewTxn(t)} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <p className="text-[11px] text-muted-foreground mt-3">Tip: click a category to see the transactions behind it.</p>
+                  </>
+                ) : (
+                  <div className="mt-6"><Empty>No spending to categorize for this selection in the chosen period.</Empty></div>
                 )}
-                <p className="text-[11px] text-muted-foreground mt-3">Tip: click a category to see the transactions behind it.</p>
               </div>
             )}
 
