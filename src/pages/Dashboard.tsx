@@ -1826,7 +1826,7 @@ function AccountDetailDialog({ account, transactions, history, onNameChange, onC
   const nameDirty = account != null && trimmedName.length > 0 && trimmedName !== account.name;
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-4xl w-[95vw] max-h-[85vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-hidden flex flex-col">
         {account && (
           <>
             <DialogHeader className="shrink-0">
@@ -1861,14 +1861,14 @@ function AccountDetailDialog({ account, transactions, history, onNameChange, onC
                 </DialogTitle>
               )}
             </DialogHeader>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4 text-sm shrink-0">
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -mx-1 px-1 space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4 text-sm">
               <Field label="Current Balance">{fmtMoney(account.currentBalance, { cents: true })}</Field>
               <Field label="Available Balance">{fmtMoney(account.availableBalance, { cents: true })}</Field>
               <Field label="Type">{account.accountType}{account.accountSubtype ? ` · ${account.accountSubtype}` : ''}</Field>
               <Field label="Last Updated">{account.updatedAt ? fmtDate(account.updatedAt) : '—'}</Field>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -mx-1 px-1">
             {chartData.length > 1 && (
               <div className="mt-2">
                 <p className="text-sm font-semibold mb-2">Balance History</p>
@@ -2458,7 +2458,7 @@ function CardDetailDialog({ card, adSpend, transactions, onColorChange, onNameCh
   const nameDirty = card != null && trimmedName.length > 0 && trimmedName !== card.name;
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-4xl w-[95vw] max-h-[85vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-hidden flex flex-col">
         {card && (
           <>
             <DialogHeader className="shrink-0">
@@ -2489,8 +2489,9 @@ function CardDetailDialog({ card, adSpend, transactions, onColorChange, onNameCh
                 <DialogTitle>{card.name} <span className="text-muted-foreground font-normal">•••• {card.lastFour}</span></DialogTitle>
               )}
             </DialogHeader>
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -mx-1 px-1 space-y-4">
             {onColorChange && (
-              <div className="flex items-center gap-3 shrink-0 -mt-1 flex-wrap">
+              <div className="flex items-center gap-3 -mt-1 flex-wrap">
                 <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Tile color</span>
                 {/* Live preview of the header gradient at the chosen color */}
                 <div className="h-7 w-20 rounded-md border border-border shrink-0"
@@ -2516,7 +2517,7 @@ function CardDetailDialog({ card, adSpend, transactions, onColorChange, onNameCh
                 )}
               </div>
             )}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4 text-sm shrink-0">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4 text-sm">
               <Field label="Current Balance (owed now)">{fmtMoney(card.currentBalance, { cents: true })}</Field>
               <Field label="Last Statement">
                 {card.lastStatementBalance != null ? fmtMoney(card.lastStatementBalance, { cents: true }) : '—'}
@@ -2544,7 +2545,6 @@ function CardDetailDialog({ card, adSpend, transactions, onColorChange, onNameCh
                 </>
               )}
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -mx-1 px-1">
               <TransactionsPanel transactions={transactions} resetKey={card.id} showAdsFilter={adSpend != null} />
             </div>
           </>
