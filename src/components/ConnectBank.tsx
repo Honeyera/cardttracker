@@ -78,11 +78,18 @@ export function ConnectBank({ onSynced }: { onSynced?: () => void }) {
     [],
   );
 
-  // User closed Link without finishing — reset so buttons don't stay spinning.
-  const onExit = useCallback(() => {
+  // User closed Link (maybe after an error) — reset so buttons don't stay
+  // spinning, and surface Plaid's actual error so failures aren't a black box.
+  const onExit = useCallback((err: any, metadata: any) => {
     reconnectRef.current = null;
     setLinkToken(null);
     setReconnecting(null);
+    if (err) {
+      console.error('Plaid Link exit', err, metadata);
+      const code = err.error_code ? ` [${err.error_code}]` : '';
+      const inst = metadata?.institution?.name ? ` · ${metadata.institution.name}` : '';
+      toast.error(`Plaid: ${err.display_message || err.error_message || 'Link closed with an error'}${code}${inst}`);
+    }
   }, []);
 
   const { open, ready, error: linkError } = usePlaidLink({ token: linkToken ?? '', onSuccess, onExit });
