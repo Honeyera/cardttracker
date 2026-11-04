@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Landmark, RefreshCw, Loader2, Settings2, Trash2, AlertTriangle } from 'lucide-react';
+import { Landmark, RefreshCw, Loader2, Settings2, Trash2, AlertTriangle, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface PlaidItem {
@@ -27,27 +27,53 @@ export function ConnectBank({ onSynced }: { onSynced?: () => void }) {
   const [manageOpen, setManageOpen] = useState(false);
   const [items, setItems] = useState<PlaidItem[] | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [reconnecting, setReconnecting] = useState<string | null>(null);
+  // When set, the next Link success is a re-auth (update mode) of this item, not a
+  // brand-new connection. A ref so the onSuccess closure always sees the latest.
+  const reconnectRef = useRef<string | null>(null);
 
   const onSuccess = useCallback(
     async (public_token: string, metadata: any) => {
+      const reconnectId = reconnectRef.current;
+      reconnectRef.current = null;
       try {
-        const { data, error } = await supabase.functions.invoke('plaid-exchange', {
-          body: { public_token, institution: metadata?.institution ?? null },
-        });
-        if (error || data?.error) throw new Error(error?.message || data?.error);
-        toast.success(`Connected ${data.institution ?? 'bank'}. Syncing…`);
-        await runSync();
+        if (reconnectId) {
+          // Update-mode re-auth: same item, token is valid again — just flip it
+          // back to active and re-sync. No public-token exchange.
+          const { data, error } = await supabase.functions.invoke('plaid-manage', {
+            body: { action: 'reactivate', item_id: reconnectId },
+          });
+          if (error || data?.error) throw new Error(error?.message || data?.error);
+          toast.success('Reconnected. Syncing…');
+          await runSync();
+          await loadItems();
+        } else {
+          const { data, error } = await supabase.functions.invoke('plaid-exchange', {
+            body: { public_token, institution: metadata?.institution ?? null },
+          });
+          if (error || data?.error) throw new Error(error?.message || data?.error);
+          toast.success(`Connected ${data.institution ?? 'bank'}. Syncing…`);
+          await runSync();
+        }
       } catch (e) {
-        toast.error(`Could not save connection: ${(e as Error).message}`);
+        toast.error(`Could not finish: ${(e as Error).message}`);
       } finally {
         setLinkToken(null);
+        setReconnecting(null);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
-  const { open, ready, error: linkError } = usePlaidLink({ token: linkToken ?? '', onSuccess });
+  // User closed Link without finishing — reset so buttons don't stay spinning.
+  const onExit = useCallback(() => {
+    reconnectRef.current = null;
+    setLinkToken(null);
+    setReconnecting(null);
+  }, []);
+
+  const { open, ready, error: linkError } = usePlaidLink({ token: linkToken ?? '', onSuccess, onExit });
 
   useEffect(() => {
     if (linkToken && ready) open();
@@ -70,6 +96,21 @@ export function ConnectBank({ onSynced }: { onSynced?: () => void }) {
       toast.error(`Could not start Plaid: ${(e as Error).message}`);
     } finally {
       setPreparing(false);
+    }
+  };
+
+  // Re-authenticate an existing connection in place (Plaid Link update mode) —
+  // no removal, no lost history. Used for banks flagged "Needs reconnect".
+  const reconnect = async (item: PlaidItem) => {
+    setReconnecting(item.item_id);
+    try {
+      const { data, error } = await supabase.functions.invoke('plaid-link-token', { body: { item_id: item.item_id } });
+      if (error || data?.error) throw new Error(error?.message || data?.error);
+      reconnectRef.current = item.item_id;
+      setLinkToken(data.link_token); // opens Link in update mode (via the effect)
+    } catch (e) {
+      toast.error(`Could not start reconnect: ${(e as Error).message}`);
+      setReconnecting(null);
     }
   };
 
@@ -173,15 +214,29 @@ export function ConnectBank({ onSynced }: { onSynced?: () => void }) {
                       )}
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => removeItem(it)}
-                    disabled={removing === it.item_id}
-                  >
-                    {removing === it.item_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                  </Button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {it.status === 'needs_reauth' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => reconnect(it)}
+                        disabled={reconnecting === it.item_id || linkToken != null}
+                      >
+                        {reconnecting === it.item_id
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <><Link2 className="w-4 h-4 mr-1" />Reconnect</>}
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => removeItem(it)}
+                      disabled={removing === it.item_id}
+                    >
+                      {removing === it.item_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

@@ -98,6 +98,18 @@ serve(async (req) => {
       return json({ ok: true, removed: body.item_id });
     }
 
+    if (action === "reactivate") {
+      // After a successful Plaid Link update-mode re-auth, flip the item back to
+      // active (and clear any error/stale lock) so the next sync picks it up.
+      if (!body.item_id) return json({ error: "item_id required" }, 400);
+      const { error } = await admin
+        .from("plaid_items")
+        .update({ status: "active", last_error: null, syncing_at: null, updated_at: new Date().toISOString() })
+        .eq("item_id", body.item_id);
+      if (error) return json({ error: error.message }, 500);
+      return json({ ok: true, reactivated: body.item_id });
+    }
+
     return json({ error: `Unknown action: ${action}` }, 400);
   } catch (error) {
     console.error("plaid-manage error:", error);
