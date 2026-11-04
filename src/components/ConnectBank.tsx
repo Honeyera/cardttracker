@@ -16,6 +16,18 @@ interface PlaidItem {
   masks?: string[];
 }
 
+// supabase.functions.invoke reports a generic "non-2xx status code" on failure;
+// the real message is in the function's JSON body (error.context is the Response).
+async function fnError(data: any, error: any): Promise<string | null> {
+  if (data?.error) return String(data.error);
+  if (!error) return null;
+  const ctx = (error as { context?: Response }).context;
+  if (ctx && typeof ctx.json === 'function') {
+    try { const b = await ctx.json(); if (b?.error) return String(b.error); } catch { /* fall through */ }
+  }
+  return (error as Error).message ?? 'Unknown error';
+}
+
 // "Connect bank" launches Plaid Link to add an institution; "Sync now" triggers
 // an immediate pull; "Manage banks" lists connections and lets you remove one.
 // Day-to-day syncing is automatic (daily pg_cron).
@@ -90,7 +102,8 @@ export function ConnectBank({ onSynced }: { onSynced?: () => void }) {
     setPreparing(true);
     try {
       const { data, error } = await supabase.functions.invoke('plaid-link-token', { body: {} });
-      if (error || data?.error) throw new Error(error?.message || data?.error);
+      const em = await fnError(data, error);
+      if (em) throw new Error(em);
       setLinkToken(data.link_token);
     } catch (e) {
       toast.error(`Could not start Plaid: ${(e as Error).message}`);
@@ -105,7 +118,8 @@ export function ConnectBank({ onSynced }: { onSynced?: () => void }) {
     setReconnecting(item.item_id);
     try {
       const { data, error } = await supabase.functions.invoke('plaid-link-token', { body: { item_id: item.item_id } });
-      if (error || data?.error) throw new Error(error?.message || data?.error);
+      const em = await fnError(data, error);
+      if (em) throw new Error(em);
       reconnectRef.current = item.item_id;
       setLinkToken(data.link_token); // opens Link in update mode (via the effect)
     } catch (e) {
@@ -118,7 +132,8 @@ export function ConnectBank({ onSynced }: { onSynced?: () => void }) {
     setSyncing(true);
     try {
       const { data, error } = await supabase.functions.invoke('plaid-sync', { body: {} });
-      if (error || data?.error) throw new Error(error?.message || data?.error);
+      const em = await fnError(data, error);
+      if (em) throw new Error(em);
       const txns = (data.summary ?? []).reduce((n: number, s: any) => n + (s.transactions ?? 0), 0);
       toast.success(`Synced ${data.items ?? 0} bank(s), ${txns} transactions.`);
       onSynced?.();
