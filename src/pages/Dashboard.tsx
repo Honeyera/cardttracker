@@ -104,6 +104,14 @@ function isSettled(card: FinanceCard, paidTowardStatement = 0): boolean {
 // last_payment_amount, which misses installment payments.
 function interestRisk(card: FinanceCard, paidTowardStatement: number): { paid: number; statement: number; remaining: number } | null {
   if (isSettled(card, paidTowardStatement)) return null;
+  // Interest only accrues when the statement isn't paid in full BY the due date.
+  // Before the due date a partial payment (or a small statement credit) is
+  // normal — the card is simply "due", not underpaid. Only warn once the due
+  // date has passed (or the issuer itself flags it overdue).
+  if (!card.isOverdue) {
+    const due = resolveDue(card);
+    if (!due || due.days >= 0) return null;
+  }
   const stmt = card.lastStatementBalance ?? 0;
   if (stmt <= 0.005) return null;
   if (paidTowardStatement <= 0.005) return null; // nothing paid → a "due" case, not underpayment
@@ -272,12 +280,14 @@ const Dashboard = () => {
       .filter((x) => x.due && x.due.days >= 0 && x.due.days <= 7 && !isSettled(x.card, paidFor(x.card.id)))
       .sort((a, b) => (a.due!.days - b.due!.days));
   }, [visibleCards]);
-  // Sum what actually has to be paid (statement balance), not the full card
-  // balance — matches the per-card "Pay" amount.
+  // Sum what actually has to be paid (statement balance minus payments/credits
+  // already applied), not the full card balance — matches the per-card "Pay" amount.
   const dueSoonTotal = dueSoon.reduce((s, x) => {
     const c = x.card;
-    const amountDue = (c.lastStatementBalance && c.lastStatementBalance > 0.005)
-      ? c.lastStatementBalance
+    const stmt = c.lastStatementBalance ?? 0;
+    const remaining = Math.max(0, stmt - paidFor(c.id));
+    const amountDue = (stmt > 0.005 && remaining > 0.005)
+      ? remaining
       : (c.currentBalance || c.minimumPayment || c.totalBalance || 0);
     return s + amountDue;
   }, 0);
@@ -1088,15 +1098,16 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
   const gradient = cardColorClasses[(card.color as CardColor)] ?? cardColorClasses.navy;
   const utilization = card.creditLimit > 0 ? Math.min(1, card.currentBalance / card.creditLimit) : null;
 
-  // Amount to pay: the statement balance (what's due for the cycle), with
-  // fallbacks for odd synced states.
-  const payAmount = (card.lastStatementBalance && card.lastStatementBalance > 0.005)
-    ? card.lastStatementBalance
+  // Amount to pay: what's LEFT of the statement after payments/credits applied
+  // since it closed (falls back for odd synced states).
+  const stmtBal = card.lastStatementBalance ?? 0;
+  const stmtRemaining = Math.max(0, stmtBal - paidTowardStatement);
+  const payAmount = (stmtBal > 0.005 && stmtRemaining > 0.005)
+    ? stmtRemaining
     : (card.currentBalance || card.minimumPayment || card.totalBalance);
 
   // One status strip per tile: do I need to act, how much, by when.
   let strip: { tone: Tone; icon: React.ComponentType<{ className?: string }>; text: string; subtext?: string };
-  const stmtBal = card.lastStatementBalance ?? 0;
   const notRequired = /not required|no payment|don'?t have a payment|paid in full|nothing due/i.test(card.paymentStatus ?? '');
   const forceDue = unpaidStatementDueWithin(card, paidTowardStatement, 15);
   if (card.isOverdue) {
@@ -1195,7 +1206,7 @@ function CardTile({ card, adSpend, paidTowardStatement, points, onClick }: { car
               {/* Lead with what must actually be paid (the statement balance),
                   not the full card balance; show the total underneath. */}
               <p className="text-xs text-muted-foreground">Statement balance due</p>
-              <p className="text-2xl font-bold text-card-foreground">{fmtMoney(stmtBal, { cents: true })}</p>
+              <p className="text-2xl font-bold text-card-foreground">{fmtMoney(stmtRemaining > 0.005 ? stmtRemaining : stmtBal, { cents: true })}</p>
               <p className="text-xs text-muted-foreground mt-0.5">Total balance {fmtMoney(card.currentBalance, { cents: true })}</p>
             </>
           ) : (
