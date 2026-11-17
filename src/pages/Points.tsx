@@ -204,6 +204,12 @@ export default function Points() {
     const newTomerTotal = tomerTotal + (entry.person === 'Tomer' ? entry.points_redeemed : 0);
     const newLeoTotal = leoTotal + (entry.person === 'Leo' ? entry.points_redeemed : 0);
 
+    // Per-card-type balances (Amex Gold vs Chase), also adjusted for this entry,
+    // so the email can say who should take what on each type separately.
+    const entryCategory = categorizeEntry(entry);
+    const adj = (cat: 'gold' | 'chase', who: 'Tomer' | 'Leo') =>
+      entryCategory === cat && entry.person === who ? entry.points_redeemed : 0;
+
     console.log('Sending email for:', entry.card_name, 'digits:', emailCard?.lastFiveDigits);
     supabase.functions.invoke('send-points-email', {
       body: {
@@ -215,6 +221,11 @@ export default function Points() {
         notes: entry.notes,
         tomer_total: newTomerTotal,
         leo_total: newLeoTotal,
+        entry_category: entryCategory,
+        gold_tomer: balanceByCategory.gold.tomer + adj('gold', 'Tomer'),
+        gold_leo: balanceByCategory.gold.leo + adj('gold', 'Leo'),
+        chase_tomer: balanceByCategory.chase.tomer + adj('chase', 'Tomer'),
+        chase_leo: balanceByCategory.chase.leo + adj('chase', 'Leo'),
       },
     }).then(({ data, error }) => {
       if (error) {
@@ -351,7 +362,8 @@ export default function Points() {
   // Balances are calculated independently per card type. Tomer & Leo should
   // each take an equal amount within each type — Gold/Amex and Chase points
   // are not interchangeable, so they don't net against each other.
-  const balanceByCategory = useMemo(() => {
+  // Category matcher shared by the balance tiles and the notification email.
+  const categorizeEntry = useMemo(() => {
     const goldIds = new Set(
       cards
         .filter((c) => c.color === 'gold' || normalizeCardText(c.name).includes('gold'))
@@ -365,8 +377,7 @@ export default function Points() {
         })
         .map((c) => c.id)
     );
-
-    const categorize = (p: PointEntry): 'gold' | 'chase' | null => {
+    return (p: { card_id?: string | null; card_name?: string | null }): 'gold' | 'chase' | null => {
       const cardId = p.card_id ?? cards.find((c) => c.name === p.card_name)?.id;
       if (cardId && goldIds.has(cardId)) return 'gold';
       if (cardId && chaseIds.has(cardId)) return 'chase';
@@ -375,6 +386,10 @@ export default function Points() {
       if (['chase', 'sapphire', 'ultimate rewards', 'freedom', 'ink'].some((t) => name.includes(t))) return 'chase';
       return null;
     };
+  }, [cards]);
+
+  const balanceByCategory = useMemo(() => {
+    const categorize = categorizeEntry;
 
     let tomerGold = 0, leoGold = 0, tomerChase = 0, leoChase = 0;
     points.forEach((p) => {
@@ -402,7 +417,7 @@ export default function Points() {
       gold: balanceFor(tomerGold, leoGold),
       chase: balanceFor(tomerChase, leoChase),
     };
-  }, [points, cards]);
+  }, [points, cards, categorizeEntry]);
 
   // Available-points totals by category
   const goldCardsTotal = useMemo(() => {
